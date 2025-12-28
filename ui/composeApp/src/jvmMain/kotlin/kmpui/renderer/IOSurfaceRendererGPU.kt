@@ -1,4 +1,4 @@
-package kmpui
+package kmpui.renderer
 
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.InternalComposeUiApi

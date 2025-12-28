@@ -1,7 +1,7 @@
 #import <Cocoa/Cocoa.h>
 #import <IOSurface/IOSurface.h>
 #import <CoreVideo/CoreVideo.h>
-#import "iosurface_ipc.h"
+#import "iosurface_provider.h"
 
 // View that displays an IOSurface as its layer contents
 @interface SurfaceView : NSView

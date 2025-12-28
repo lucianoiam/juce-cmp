@@ -6,4 +6,4 @@ cd "$(dirname "$0")/.."
 ./scripts/build.sh
 
 # Run the host app
-./host/build/kmp-host.app/Contents/MacOS/kmp-host
+./host/build/host.app/Contents/MacOS/host
