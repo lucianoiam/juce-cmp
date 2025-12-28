@@ -7,6 +7,9 @@ fun main(args: Array<String>) {
     val embedMode = args.contains("--embed")
     
     if (embedMode) {
+        // Hide dock icon when running as embedded child process
+        System.setProperty("apple.awt.UIElement", "true")
+        
         // Parse --iosurface-id=<id> argument from parent process
         val surfaceID = args
             .firstOrNull { it.startsWith("--iosurface-id=") }

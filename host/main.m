@@ -106,6 +106,9 @@ static CVReturn displayLinkCallback(CVDisplayLinkRef displayLink,
     [self.window setDelegate:self];
     [self.window makeKeyAndOrderFront:nil];
     
+    // Activate app and bring window to front
+    [[NSApplication sharedApplication] activateIgnoringOtherApps:YES];
+    
     // Launch renderer as child process (inherits mach port)
     // Use the native distributable for direct child process launch
     // Get path relative to host executable: host/build/kmp-host.app/Contents/MacOS/kmp-host
