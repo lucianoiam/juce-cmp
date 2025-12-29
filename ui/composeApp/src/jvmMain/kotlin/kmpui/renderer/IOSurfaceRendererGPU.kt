@@ -112,13 +112,15 @@ fun runIOSurfaceRendererGPU(surfaceID: Int, content: @Composable () -> Unit) {
                 println("[GPU] Skia Surface created - zero-copy pipeline ready!")
                 
                 try {
+                    // Track if scene needs redraw (atomic for thread safety)
+                    val needsRedraw = java.util.concurrent.atomic.AtomicBoolean(true)
+                    
                     // Create Compose scene that will render to our surface
-                    // Need to use Dispatchers.Unconfined so recomposition happens on the render thread
                     val scene = CanvasLayersComposeScene(
                         density = Density(1f),
                         size = IntSize(width, height),
                         coroutineContext = Dispatchers.Unconfined,
-                        invalidate = { /* We drive the render loop ourselves */ }
+                        invalidate = { needsRedraw.set(true) }
                     )
                     scene.setContent(content)
                     println("[GPU] ComposeScene created")
@@ -128,6 +130,7 @@ fun runIOSurfaceRendererGPU(surfaceID: Int, content: @Composable () -> Unit) {
                     val eventQueue = ConcurrentLinkedQueue<InputEvent>()
                     val inputReceiver = InputReceiver { event ->
                         eventQueue.offer(event)
+                        needsRedraw.set(true) // Input likely causes visual change
                     }
                     inputReceiver.start()
                     println("[GPU] Input receiver started")
@@ -135,36 +138,55 @@ fun runIOSurfaceRendererGPU(surfaceID: Int, content: @Composable () -> Unit) {
                     try {
                         // Render loop - Compose draws directly to IOSurface!
                         runBlocking {
-                            val frameDelayMs = 16L // ~60 FPS
+                            val targetFrameTimeNs = 16_666_667L // ~60 FPS (16.67ms)
                             println("[GPU] Starting zero-copy render loop...")
                             System.out.flush()
                             var frameCount = 0
                             
                             while (true) {
                                 try {
+                                    val frameStart = System.nanoTime()
+                                    
                                     // Process pending input events
                                     while (true) {
                                         val event = eventQueue.poll() ?: break
                                         inputDispatcher.dispatch(event)
                                     }
                                     
-                                    // Clear and render Compose content directly to IOSurface
-                                    val canvas = skiaSurface.canvas
-                                    canvas.clear(Color.WHITE)
+                                    // Check if scene has pending animations/recompositions
+                                    val hasInvalidations = scene.hasInvalidations()
                                     
-                                    // Render Compose scene directly to the IOSurface-backed canvas!
-                                    scene.render(canvas.asComposeCanvas(), System.nanoTime())
-                                    
-                                    // Flush Skia's GPU commands and sync with CPU
-                                    skiaSurface.flushAndSubmit(syncCpu = true)
-                                    
-                                    if (frameCount == 0) {
-                                        println("[GPU] First frame rendered - zero-copy active!")
-                                        System.out.flush()
+                                    // Render if invalidated or scene has pending work
+                                    if (needsRedraw.getAndSet(false) || hasInvalidations) {
+                                        
+                                        // Clear and render Compose content directly to IOSurface
+                                        val canvas = skiaSurface.canvas
+                                        canvas.clear(Color.WHITE)
+                                        
+                                        // Render Compose scene directly to the IOSurface-backed canvas!
+                                        scene.render(canvas.asComposeCanvas(), frameStart)
+                                        
+                                        // Flush GPU commands - don't sync to avoid blocking
+                                        skiaSurface.flushAndSubmit(syncCpu = false)
+                                        
+                                        if (frameCount == 0) {
+                                            println("[GPU] First frame rendered - zero-copy active!")
+                                            System.out.flush()
+                                        }
+                                        frameCount++
                                     }
-                                    frameCount++
                                     
-                                    delay(frameDelayMs)
+                                    // Precise frame pacing - sleep for remaining time
+                                    val elapsed = System.nanoTime() - frameStart
+                                    val sleepNs = targetFrameTimeNs - elapsed
+                                    if (sleepNs > 1_000_000) { // Only sleep if > 1ms remaining
+                                        delay(sleepNs / 1_000_000)
+                                    } else if (sleepNs > 0) {
+                                        // Spin-wait for sub-millisecond precision
+                                        while (System.nanoTime() - frameStart < targetFrameTimeNs) {
+                                            Thread.yield()
+                                        }
+                                    }
                                 } catch (e: CancellationException) {
                                     throw e
                                 } catch (e: Exception) {
