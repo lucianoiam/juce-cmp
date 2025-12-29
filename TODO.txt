@@ -1,0 +1,39 @@
+KMP Embed - Proposed Enhancements
+==================================
+
+INPUT ENHANCEMENTS
+------------------
+[ ] Mouse cursor changes (pointer, hand, text) - Compose requests cursor styles, forward back to standalone
+[ ] Drag and drop support
+[ ] Text input / IME for international keyboards
+[ ] Touch/trackpad gestures (pinch, rotate)
+
+RENDERING
+---------
+[ ] Window resize handling - recreate IOSurface at new size
+[ ] HiDPI/Retina support - pass scale factor, render at 2x
+[ ] Triple buffering to eliminate any remaining tearing
+
+ARCHITECTURE
+------------
+[ ] Bidirectional IPC - let Compose send messages back (cursor, clipboard, window title)
+[ ] Shared memory ring buffer instead of pipe for lower latency
+[ ] Extract embedding as a library/framework others can use
+
+PLATFORM EXPANSION
+------------------
+[ ] Windows standalone (Win32 + shared texture via D3D/Vulkan)
+[ ] Linux/X11 or Wayland support
+[ ] JUCE plugin wrapper for audio apps
+
+DEVELOPER EXPERIENCE
+--------------------
+[ ] Hot reload in embedded mode (currently only standalone KMP has it)
+[ ] Debug overlay showing frame times
+[ ] Example with more complex UI (lists, text fields, navigation)
+
+PRODUCTION READINESS
+--------------------
+[ ] Error recovery if child crashes
+[ ] Graceful shutdown handshake
+[ ] Security sandbox considerations
