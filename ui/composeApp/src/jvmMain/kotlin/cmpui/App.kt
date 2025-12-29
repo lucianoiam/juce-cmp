@@ -1,4 +1,4 @@
-package kmpui
+package cmpui
 
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.animateColorAsState
@@ -20,8 +20,8 @@ import androidx.compose.ui.graphics.Color
 import org.jetbrains.compose.resources.painterResource
 import org.jetbrains.compose.ui.tooling.preview.Preview
 
-import kmpui.composeapp.generated.resources.Res
-import kmpui.composeapp.generated.resources.compose_multiplatform
+import cmpui.composeapp.generated.resources.Res
+import cmpui.composeapp.generated.resources.compose_multiplatform
 
 @Composable
 @Preview

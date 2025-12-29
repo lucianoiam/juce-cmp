@@ -1,4 +1,4 @@
-package kmpui.renderer
+package cmpui.renderer
 
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.InternalComposeUiApi
@@ -11,10 +11,10 @@ import com.sun.jna.Native
 import com.sun.jna.Pointer
 import com.sun.jna.ptr.IntByReference
 import kotlinx.coroutines.*
-import kmpui.input.InputDispatcher
-import kmpui.input.InputEvent
-import kmpui.input.InputReceiver
-import kmpui.input.EventType
+import cmpui.input.InputDispatcher
+import cmpui.input.InputEvent
+import cmpui.input.InputReceiver
+import cmpui.input.EventType
 import org.jetbrains.skia.*
 import java.util.concurrent.ConcurrentLinkedQueue
 import java.util.concurrent.atomic.AtomicReference

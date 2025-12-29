@@ -1,6 +1,6 @@
-# KMP Embed
+# CMP Embed
 
-Embeds a Kotlin Multiplatform (Compose Desktop) UI inside a native macOS application using IOSurface for zero-copy GPU rendering and binary IPC for input forwarding.
+Embeds a Compose Multiplatform (Compose Desktop) UI inside a native macOS application using IOSurface for zero-copy GPU rendering and binary IPC for input forwarding.
 
 ## Quick Start
 
@@ -51,7 +51,7 @@ Embeds a Kotlin Multiplatform (Compose Desktop) UI inside a native macOS applica
 
 This builds:
 1. **Native Metal renderer** (`libiosurface_renderer.dylib`)
-2. **Compose UI app** (`kmpui.app` with bundled JRE)
+2. **Compose UI app** (`cmpui.app` with bundled JRE)
 3. **Standalone app** (`standalone.app`)
 
 ## Run
@@ -78,7 +78,7 @@ standalone/            # Native macOS standalone application
 
 ui/composeApp/         # Kotlin Multiplatform Compose application
   src/jvmMain/
-    kotlin/kmpui/
+    kotlin/cmpui/
       main.kt          # Entry point (standalone or embedded mode)
       App.kt           # Compose UI (vanilla demo app)
       input/           # Input event handling

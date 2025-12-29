@@ -1,4 +1,4 @@
-KMP Embed - Proposed Enhancements
+CMP Embed - Proposed Enhancements
 ==================================
 
 INPUT ENHANCEMENTS
@@ -28,7 +28,7 @@ PLATFORM EXPANSION
 
 DEVELOPER EXPERIENCE
 --------------------
-[ ] Hot reload in embedded mode (currently only standalone KMP has it)
+[ ] Hot reload in embedded mode (currently only standalone CMP has it)
 [ ] Debug overlay showing frame times
 [ ] Example with more complex UI (lists, text fields, navigation)
 

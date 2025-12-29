@@ -1,5 +1,5 @@
 cmake_minimum_required(VERSION 3.15)
-project(kmp-embed)
+project(cmp-embed)
 
 # Paths
 set(UI_DIR "${CMAKE_SOURCE_DIR}/ui")
@@ -32,7 +32,7 @@ endif()
 
 #
 # 2. Compose UI Application
-#    Builds the KMP Compose Desktop app as a native distributable
+#    Builds the CMP Compose Desktop app as a native distributable
 #
 if(WIN32)
     set(GRADLE_CMD cmd /c gradlew.bat)

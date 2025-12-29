@@ -345,7 +345,7 @@ static CVReturn displayLinkCallback(CVDisplayLinkRef displayLink,
     CFRetain(self.surface);  // View holds a reference for double-buffering
     
     [self.window setContentView:view];
-    [self.window setTitle:@"KMP Embed"];
+    [self.window setTitle:@"CMP Embed"];
     [self.window setDelegate:self];
     [self.window makeKeyAndOrderFront:nil];
     
@@ -358,11 +358,11 @@ static CVReturn displayLinkCallback(CVDisplayLinkRef displayLink,
     
     // Launch renderer as child process (inherits mach port)
     // Use the native distributable for direct child process launch
-    // Get path relative to host executable: host/build/kmp-host.app/Contents/MacOS/kmp-host
-    // KMP UI is at: ui/composeApp/build/compose/binaries/main/app/kmpui.app/Contents/MacOS/kmpui
+    // Get path relative to host executable: host/build/cmp-host.app/Contents/MacOS/cmp-host
+    // CMP UI is at: ui/composeApp/build/compose/binaries/main/app/cmpui.app/Contents/MacOS/cmpui
     NSString *execPath = [[NSBundle mainBundle] executablePath];
     NSString *projectRoot = [[[[[[execPath stringByDeletingLastPathComponent] stringByDeletingLastPathComponent] stringByDeletingLastPathComponent] stringByDeletingLastPathComponent] stringByDeletingLastPathComponent] stringByDeletingLastPathComponent];
-    NSString *rendererApp = [projectRoot stringByAppendingPathComponent:@"ui/composeApp/build/compose/binaries/main/app/kmpui.app/Contents/MacOS/kmpui"];
+    NSString *rendererApp = [projectRoot stringByAppendingPathComponent:@"ui/composeApp/build/compose/binaries/main/app/cmpui.app/Contents/MacOS/cmpui"];
     const char *args[] = { "--embed", NULL };
     iosurface_ipc_launch_child([rendererApp UTF8String], args, NULL);
 }

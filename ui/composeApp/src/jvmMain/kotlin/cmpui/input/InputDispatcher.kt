@@ -1,4 +1,4 @@
-package kmpui.input
+package cmpui.input
 
 import androidx.compose.ui.InternalComposeUiApi
 import androidx.compose.ui.geometry.Offset

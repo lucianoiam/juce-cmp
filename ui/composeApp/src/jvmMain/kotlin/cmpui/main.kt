@@ -1,8 +1,8 @@
-package kmpui
+package cmpui
 
 import androidx.compose.ui.window.Window
 import androidx.compose.ui.window.application
-import kmpui.renderer.runIOSurfaceRenderer
+import cmpui.renderer.runIOSurfaceRenderer
 
 /**
  * Application entry point.
@@ -40,7 +40,7 @@ fun main(args: Array<String>) {
         application {
             Window(
                 onCloseRequest = ::exitApplication,
-                title = "KMP UI"
+                title = "CMP UI"
             ) {
                 App()
             }

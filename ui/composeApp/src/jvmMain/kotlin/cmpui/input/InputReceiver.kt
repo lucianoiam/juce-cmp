@@ -1,4 +1,4 @@
-package kmpui.input
+package cmpui.input
 
 import java.io.InputStream
 import java.nio.ByteBuffer

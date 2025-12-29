@@ -1,11 +1,11 @@
-package kmpui.renderer
+package cmpui.renderer
 
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.ImageComposeScene
 import androidx.compose.ui.unit.Density
 import kotlinx.coroutines.*
-import kmpui.input.EventType
-import kmpui.input.InputReceiver
+import cmpui.input.EventType
+import cmpui.input.InputReceiver
 import org.jetbrains.skia.*
 
 /**

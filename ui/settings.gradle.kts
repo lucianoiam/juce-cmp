@@ -1,4 +1,4 @@
-rootProject.name = "KMPUI"
+rootProject.name = "CMPUI"
 enableFeaturePreview("TYPESAFE_PROJECT_ACCESSORS")
 
 pluginManagement {

@@ -1,4 +1,4 @@
-package kmpui.renderer
+package cmpui.renderer
 
 import com.sun.jna.Library
 import com.sun.jna.Native

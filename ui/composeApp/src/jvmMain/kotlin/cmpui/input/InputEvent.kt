@@ -1,4 +1,4 @@
-package kmpui.input
+package cmpui.input
 
 /**
  * Input event types and data classes matching common/input_protocol.h

@@ -1,4 +1,4 @@
-package kmpui
+package cmpui
 
 class Greeting {
     private val platform = getPlatform()
