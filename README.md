@@ -1,10 +1,14 @@
 # CMP Embed
 
-Embeds a Compose Multiplatform (Compose Desktop) UI inside a native macOS application using IOSurface for zero-copy GPU rendering and binary IPC for input forwarding.
+Embeds a Compose Multiplatform (Compose Desktop) UI inside a JUCE application or native macOS application using IOSurface for zero-copy GPU rendering and binary IPC for input forwarding.
 
 ## Quick Start
 
 ```bash
+# JUCE app
+./scripts/build.sh && ./scripts/run_juce.sh
+
+# Standalone native app
 ./scripts/build.sh && ./scripts/run_standalone.sh
 ```
 
@@ -15,6 +19,31 @@ Embeds a Compose Multiplatform (Compose Desktop) UI inside a native macOS applic
 - Xcode Command Line Tools (`xcode-select --install`)
 
 ## Architecture
+
+Two host applications are provided:
+
+### JUCE Host
+
+```
+┌─────────────────────────────────────────────────────────┐
+│  JUCE Standalone Application                            │
+│  - IOSurfaceComponent creates shared GPU surface        │
+│  - SurfaceView (NSView) displays via CALayer            │
+│  - CVDisplayLink for vsync-synchronized refresh         │
+│  - Transparent JUCE component captures input events     │
+│  - Launches Compose UI as child process                 │
+└─────────────────┬───────────────────────────────────────┘
+                  │ IOSurface ID (arg)    Input events (stdin)
+                  ▼
+┌─────────────────────────────────────────────────────────┐
+│  UI (Compose Desktop / Skia / Metal)                    │
+│  - Renders directly to IOSurface-backed Metal texture   │
+│  - Receives input events, injects into ComposeScene     │
+│  - Zero CPU pixel copies, invalidation-based rendering  │
+└─────────────────────────────────────────────────────────┘
+```
+
+### Standalone Host (Native macOS)
 
 ```
 ┌─────────────────────────────────────────────────────────┐
@@ -52,16 +81,25 @@ Embeds a Compose Multiplatform (Compose Desktop) UI inside a native macOS applic
 This builds:
 1. **Native Metal renderer** (`libiosurface_renderer.dylib`)
 2. **Compose UI app** (`cmpui.app` with bundled JRE)
-3. **Standalone app** (`standalone.app`)
+3. **JUCE audio plugin host** (`CMP Embed Host.app` - fetches JUCE 8.0.4 via CMake)
+4. **Standalone app** (`standalone.app`)
 
 ## Run
 
 ```bash
+# JUCE host (recommended for plugin development)
+./scripts/run_juce.sh
+
+# Standalone host
 ./scripts/run_standalone.sh
 ```
 
 Or after building:
 ```bash
+# JUCE
+./build/juce/CMPEmbedHost_artefacts/Standalone/"CMP Embed Host.app"/Contents/MacOS/"CMP Embed Host"
+
+# Standalone
 ./build/standalone/standalone.app/Contents/MacOS/standalone
 ```
 
@@ -70,6 +108,14 @@ Or after building:
 ```
 common/                # Cross-platform shared code
   input_protocol.h     # Binary input event protocol (16 bytes/event)
+
+juce/                  # JUCE audio plugin host
+  PluginProcessor.cpp/h    # Passthrough audio processor
+  PluginEditor.cpp/h       # Editor hosting IOSurfaceComponent
+  IOSurfaceComponent.mm/h  # Displays IOSurface, captures input
+  IOSurfaceProvider.mm/h   # Creates IOSurface, launches child
+  InputSender.cpp/h        # Sends input events via stdin pipe
+  CMakeLists.txt           # Fetches JUCE 8.0.4, builds plugin
 
 standalone/            # Native macOS standalone application
   main.m               # Window, IOSurface display, input capture
@@ -93,6 +139,7 @@ ui/composeApp/         # Kotlin Multiplatform Compose application
 
 scripts/
   build.sh             # Build everything (CMake orchestrated)
+  run_juce.sh          # Build and run JUCE host
   run_standalone.sh    # Build and run standalone app
 ```
 
@@ -125,7 +172,7 @@ See [TODO.txt](TODO.txt) for planned enhancements including:
 - HiDPI/Retina support
 - Bidirectional IPC (cursor, clipboard)
 - Windows/Linux platform support
-- JUCE integration for audio plugin hosts
+- AU/VST3 plugin builds (currently Standalone only)
 
 ## License
 

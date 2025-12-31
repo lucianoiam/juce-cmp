@@ -48,7 +48,13 @@ add_custom_target(ui
 add_dependencies(ui native_renderer)
 
 #
-# 3. Standalone Application (subdirectory - will become JUCE project)
+# 3. Standalone Application (native Cocoa demo)
 #
 add_subdirectory(standalone)
 add_dependencies(standalone ui)
+
+#
+# 4. JUCE Host Application (cross-platform plugin host)
+#
+add_subdirectory(juce)
+add_dependencies(CMPEmbedHost ui)
