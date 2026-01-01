@@ -30,6 +30,7 @@
 #import <Cocoa/Cocoa.h>
 #import <IOSurface/IOSurface.h>
 #import <CoreVideo/CoreVideo.h>
+#import <QuartzCore/QuartzCore.h>
 #import "iosurface_provider.h"
 #import "input_cocoa.h"
 
@@ -109,6 +110,9 @@ static CVReturn displayLinkCallback(CVDisplayLinkRef displayLink,
         self.lastCommittedSize = frame.size;
         self.pendingSize = frame.size;
         
+        // Pin content to top-left, no stretching during resize
+        self.layer.contentsGravity = kCAGravityTopLeft;
+        
         // Create and start CVDisplayLink for vsync-synchronized updates
         CVDisplayLinkCreateWithActiveCGDisplays(&_displayLink);
         CVDisplayLinkSetOutputCallback(_displayLink, displayLinkCallback, (__bridge void *)self);
@@ -141,6 +145,8 @@ static CVReturn displayLinkCallback(CVDisplayLinkRef displayLink,
  */
 - (void)updateLayer {
     self.layer.contents = (__bridge id)self.surface;
+    // Display surface pixels 1:1 as points
+    self.layer.contentsScale = 1.0;
     [self.layer setContentsChanged];
 }
 
@@ -303,7 +309,8 @@ static CVReturn displayLinkCallback(CVDisplayLinkRef displayLink,
                                                 backing:NSBackingStoreBuffered
                                                   defer:NO];
     
-    // Create IOSurface and get mach port (for child inheritance)
+    // Create IOSurface at point dimensions.
+    // The child process determines how to render (at what density).
     iosurface_ipc_create_surface(800, 600);
     self.surface = iosurface_ipc_get_surface();
     
@@ -340,7 +347,8 @@ static CVReturn displayLinkCallback(CVDisplayLinkRef displayLink,
     
     // Create view backed by IOSurface
     SurfaceView *view = [[SurfaceView alloc] initWithFrame:[[self.window contentView] bounds]];
-    view.autoresizingMask = NSViewWidthSizable | NSViewHeightSizable;
+    // Don't auto-resize the view - IOSurface stays at fixed size
+    view.autoresizingMask = 0;
     view.surface = self.surface;
     CFRetain(self.surface);  // View holds a reference for double-buffering
     

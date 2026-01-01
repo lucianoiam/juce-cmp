@@ -13,4 +13,4 @@ target_include_directories(standalone PRIVATE
     ${CMAKE_CURRENT_SOURCE_DIR}
     ${CMAKE_CURRENT_SOURCE_DIR}/../common
 )
-target_link_libraries(standalone "-framework Cocoa" "-framework IOSurface" "-framework CoreVideo")
+target_link_libraries(standalone "-framework Cocoa" "-framework IOSurface" "-framework CoreVideo" "-framework QuartzCore")
