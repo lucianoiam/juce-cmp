@@ -21,8 +21,19 @@ public:
     /** Create a shared surface with the given dimensions. */
     bool createSurface(int width, int height);
 
-    /** Resize the surface. Returns the new surface ID. */
+    /** 
+     * Resize the surface (double-buffered). 
+     * Creates a new pending surface for child to render to.
+     * Call commitPendingSurface() after child renders to swap.
+     * Returns the new surface ID.
+     */
     uint32_t resizeSurface(int width, int height);
+
+    /** Commit pending surface - swap it to become the displayed surface. */
+    void commitPendingSurface();
+
+    /** Get the pending surface (for child to render to during resize). */
+    void* getPendingSurface() const;
 
     /** Get the current surface ID (passed to child process). */
     uint32_t getSurfaceID() const;

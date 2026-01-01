@@ -67,23 +67,59 @@ public:
     uint32_t resizeSurface(int w, int h)
     {
 #if JUCE_MAC
-        // Keep old surface alive during transition
-        IOSurfaceRef oldSurface = surface;
-        surface = nullptr;
+        // Create new surface but don't release old one yet.
+        // The old surface stays in 'surface' for display.
+        // The new surface goes in 'pendingSurface' for child to render to.
+        if (pendingSurface != nullptr)
+            CFRelease(pendingSurface);
         
-        if (createSurface(w, h))
+        surfaceWidth = w;
+        surfaceHeight = h;
+
+        NSDictionary* props = @{
+            (id)kIOSurfaceWidth: @(w),
+            (id)kIOSurfaceHeight: @(h),
+            (id)kIOSurfaceBytesPerElement: @4,
+            (id)kIOSurfacePixelFormat: @((uint32_t)'BGRA'),
+            (id)kIOSurfaceIsGlobal: @YES
+        };
+        
+        pendingSurface = IOSurfaceCreate((__bridge CFDictionaryRef)props);
+        
+        if (pendingSurface != nullptr)
         {
-            if (oldSurface != nullptr)
-                CFRelease(oldSurface);
-            return IOSurfaceGetID(surface);
+            DBG("IOSurfaceProvider: Created pending surface " + juce::String(w) + "x" + juce::String(h) 
+                + ", ID=" + juce::String(IOSurfaceGetID(pendingSurface)));
+            return IOSurfaceGetID(pendingSurface);
         }
-        
-        // Restore old surface on failure
-        surface = oldSurface;
-        return surface != nullptr ? IOSurfaceGetID(surface) : 0;
+        return 0;
 #else
         juce::ignoreUnused(w, h);
         return 0;
+#endif
+    }
+
+    /// Commit the pending surface - swap it to become the displayed surface
+    void commitPendingSurface()
+    {
+#if JUCE_MAC
+        if (pendingSurface != nullptr)
+        {
+            if (surface != nullptr)
+                CFRelease(surface);
+            surface = pendingSurface;
+            pendingSurface = nullptr;
+        }
+#endif
+    }
+
+    /// Get the pending surface (for child to render to during resize)
+    void* getPendingSurface() const
+    {
+#if JUCE_MAC
+        return pendingSurface;
+#else
+        return nullptr;
 #endif
     }
 
@@ -229,11 +265,17 @@ private:
             CFRelease(surface);
             surface = nullptr;
         }
+        if (pendingSurface != nullptr)
+        {
+            CFRelease(pendingSurface);
+            pendingSurface = nullptr;
+        }
 #endif
     }
 
 #if JUCE_MAC
     IOSurfaceRef surface = nullptr;
+    IOSurfaceRef pendingSurface = nullptr;
     pid_t childPid = 0;
 #endif
     int stdinPipeFD = -1;
@@ -253,6 +295,16 @@ bool IOSurfaceProvider::createSurface(int width, int height)
 uint32_t IOSurfaceProvider::resizeSurface(int width, int height) 
 { 
     return pImpl->resizeSurface(width, height); 
+}
+
+void IOSurfaceProvider::commitPendingSurface()
+{
+    pImpl->commitPendingSurface();
+}
+
+void* IOSurfaceProvider::getPendingSurface() const
+{
+    return pImpl->getPendingSurface();
 }
 
 uint32_t IOSurfaceProvider::getSurfaceID() const 

@@ -45,8 +45,31 @@ static CVReturn displayLinkCallback(CVDisplayLinkRef displayLink,
                                     void *context);
 
 @interface SurfaceView : NSView
+
+/// Currently displayed surface (what the user sees)
 @property (nonatomic, assign) IOSurfaceRef surface;
+
+/// New surface being rendered to (not yet displayed)
+@property (nonatomic, assign) IOSurfaceRef pendingSurface;
+
+/// Size of the pending surface (target size during resize)
+@property (nonatomic, assign) NSSize pendingSize;
+
+/// Size of the currently displayed surface
+@property (nonatomic, assign) NSSize lastCommittedSize;
+
+/// Vsync-synchronized display refresh
 @property (nonatomic, assign) CVDisplayLinkRef displayLink;
+
+/// Timer for delayed swap after child renders
+@property (nonatomic, strong) NSTimer *swapTimer;
+
+/// Callback to request resize from host, receives pending surface back
+@property (nonatomic, copy) void (^resizeCallback)(NSSize size, void (^setPendingSurface)(IOSurfaceRef));
+
+/// Callback when swap is committed (to sync provider state)
+@property (nonatomic, copy) void (^commitCallback)(void);
+
 @end
 
 @implementation SurfaceView
@@ -55,6 +78,8 @@ static CVReturn displayLinkCallback(CVDisplayLinkRef displayLink,
     self = [super initWithFrame:frame];
     if (self) {
         self.wantsLayer = YES;
+        self.lastCommittedSize = frame.size;
+        self.pendingSize = frame.size;
         // Pin content to top-left, no stretching during resize
         self.layer.contentsGravity = kCAGravityTopLeft;
         
@@ -71,6 +96,8 @@ static CVReturn displayLinkCallback(CVDisplayLinkRef displayLink,
         CVDisplayLinkStop(_displayLink);
         CVDisplayLinkRelease(_displayLink);
     }
+    [_swapTimer invalidate];
+    [super dealloc];
 }
 
 - (BOOL)wantsUpdateLayer {
@@ -88,7 +115,71 @@ static CVReturn displayLinkCallback(CVDisplayLinkRef displayLink,
 
 - (void)setSurface:(IOSurfaceRef)surface {
     _surface = surface;
+    self.lastCommittedSize = NSMakeSize(IOSurfaceGetWidth(surface), IOSurfaceGetHeight(surface));
     [self.layer setNeedsDisplay];
+}
+
+#pragma mark - Resize Handling (matches standalone)
+
+/// Swap pending surface after child has rendered
+- (void)commitSwap {
+    self.swapTimer = nil;
+    
+    if (self.pendingSurface) {
+        // Notify host to commit its provider state
+        if (self.commitCallback) {
+            self.commitCallback();
+        }
+        
+        self.surface = self.pendingSurface;
+        self.pendingSurface = nil;
+        self.lastCommittedSize = self.pendingSize;
+        [self.layer setNeedsDisplay];
+    }
+    
+    // Continue if size changed during swap delay
+    if (!NSEqualSizes(self.pendingSize, self.lastCommittedSize)) {
+        [self beginResize];
+    }
+}
+
+/// Create new surface and schedule swap after one frame
+- (void)beginResize {
+    if (self.pendingSize.width <= 0 || self.pendingSize.height <= 0) return;
+    
+    [self.swapTimer invalidate];
+    
+    // Request resize from host (creates surface, sends to child)
+    // Note: callback is synchronous, sets pendingSurface immediately
+    if (self.resizeCallback) {
+        SurfaceView* selfPtr = self;
+        self.resizeCallback(self.pendingSize, ^(IOSurfaceRef surface) {
+            selfPtr.pendingSurface = surface;
+        });
+    }
+    
+    // Swap after one frame (17ms) so child has time to render
+    self.swapTimer = [NSTimer timerWithTimeInterval:0.017
+                                             target:self
+                                           selector:@selector(commitSwap)
+                                           userInfo:nil
+                                            repeats:NO];
+    [[NSRunLoop currentRunLoop] addTimer:self.swapTimer forMode:NSRunLoopCommonModes];
+}
+
+/// Handle resize request - only starts if no swap pending
+- (void)requestResize:(NSSize)newSize {
+    if (!NSEqualSizes(newSize, self.lastCommittedSize) && newSize.width > 0 && newSize.height > 0) {
+        self.pendingSize = newSize;
+        if (!self.swapTimer) {
+            [self beginResize];
+        }
+    }
+}
+
+/// Set pending surface (called by host after creating new surface)
+- (void)setPendingSurface:(IOSurfaceRef)pendingSurface {
+    _pendingSurface = pendingSurface;
 }
 
 // This view is purely for display - never accept any events
@@ -168,13 +259,6 @@ void IOSurfaceComponent::timerCallback()
 {
     if (!childLaunched && getPeer() != nullptr && !getLocalBounds().isEmpty())
         launchChildProcess();
-    
-    // Handle pending resize with delay for double-buffering
-    if (resizePending && !pendingSize.isEmpty())
-    {
-        resizePending = false;
-        handleResize();
-    }
 }
 
 void IOSurfaceComponent::launchChildProcess()
@@ -185,7 +269,6 @@ void IOSurfaceComponent::launchChildProcess()
 
     if (!surfaceProvider.createSurface(bounds.getWidth(), bounds.getHeight()))
         return;
-    lastCommittedSize = bounds;
 
     // Find the Compose UI app relative to this executable.
     // Path: build/juce/CMPEmbedHost_artefacts/Standalone/CMP Embed Host.app/
@@ -220,46 +303,19 @@ void IOSurfaceComponent::launchChildProcess()
 
 void IOSurfaceComponent::handleResize()
 {
-    auto bounds = pendingSize;
-    if (bounds.isEmpty() || bounds == lastCommittedSize) return;
-    
-    uint32_t newSurfaceID = surfaceProvider.resizeSurface(bounds.getWidth(), bounds.getHeight());
-    if (newSurfaceID != 0)
-    {
-        inputSender.sendResize(bounds.getWidth(), bounds.getHeight(), newSurfaceID);
-        
-#if JUCE_MAC
-        // Update surface immediately, then schedule final commit after child renders
-        updateNativeViewSurface();
-        updateNativeViewBounds();
-        
-        // Delay before marking committed, so if more resizes come we batch them
-        juce::Timer::callAfterDelay(17, [this, bounds]() {
-            lastCommittedSize = bounds;
-            // Check if size changed during delay
-            auto current = getLocalBounds();
-            if (current != lastCommittedSize) {
-                pendingSize = current;
-                resizePending = true;
-            }
-        });
-#else
-        lastCommittedSize = bounds;
-#endif
-    }
+    // Handled by SurfaceView now
 }
 
 void IOSurfaceComponent::resized()
 {
 #if JUCE_MAC
-    updateNativeViewBounds();
-#endif
-    auto bounds = getLocalBounds();
-    if (childLaunched && bounds != lastCommittedSize)
+    if (childLaunched && nativeView)
     {
-        pendingSize = bounds;
-        resizePending = true;
+        SurfaceView* view = (__bridge SurfaceView*)nativeView;
+        auto bounds = getLocalBounds();
+        [view requestResize:NSMakeSize(bounds.getWidth(), bounds.getHeight())];
     }
+#endif
 }
 
 #if JUCE_MAC
@@ -275,6 +331,23 @@ void IOSurfaceComponent::attachNativeView()
         SurfaceView* view = [[SurfaceView alloc] initWithFrame:NSZeroRect];
         nativeView = (__bridge_retained void*)view;
         view.surface = (IOSurfaceRef)surfaceProvider.getNativeSurface();
+        
+        // Set up resize callback - this is called from SurfaceView.beginResize
+        IOSurfaceProvider* provider = &surfaceProvider;
+        InputSender* sender = &inputSender;
+        view.resizeCallback = ^(NSSize size, void (^setPendingSurface)(IOSurfaceRef)) {
+            // Create new pending surface
+            uint32_t newSurfaceID = provider->resizeSurface((int)size.width, (int)size.height);
+            if (newSurfaceID != 0) {
+                setPendingSurface((IOSurfaceRef)provider->getPendingSurface());
+                sender->sendResize((int)size.width, (int)size.height, newSurfaceID);
+            }
+        };
+        
+        // Set up commit callback - called when SurfaceView swaps surfaces
+        view.commitCallback = ^{
+            provider->commitPendingSurface();
+        };
     }
     
     SurfaceView* view = (__bridge SurfaceView*)nativeView;

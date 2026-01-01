@@ -53,9 +53,6 @@ private:
     InputSender inputSender;
 
     bool childLaunched = false;
-    bool resizePending = false;
-    juce::Rectangle<int> pendingSize;
-    juce::Rectangle<int> lastCommittedSize;
 
 #if JUCE_MAC
     void* nativeView = nullptr;  // SurfaceView for displaying IOSurface
