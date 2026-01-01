@@ -1,5 +1,6 @@
 #pragma once
 
+#include <juce_core/juce_core.h>
 #include <cstdint>
 #include <string>
 #include <functional>
@@ -56,6 +57,12 @@ public:
 
     /** Get the stdin pipe file descriptor for input forwarding. */
     int getInputPipeFD() const;
+
+    /** Get the IPC pipe file descriptor for reading UI messages. */
+    int getIPCPipeFD() const;
+    
+    /** Get the IPC FIFO path for UIReceiver to open directly. */
+    juce::String getIPCFifoPath() const;
 
 private:
     class Impl;

@@ -17,6 +17,8 @@
 #if JUCE_MAC
 #import <Foundation/Foundation.h>
 #import <IOSurface/IOSurface.h>
+#include <fcntl.h>
+#include <sys/stat.h>
 #endif
 
 class IOSurfaceProvider::Impl
@@ -168,22 +170,36 @@ public:
         std::string execPath = executable.toStdString();
         std::string workDir = workingDir.toStdString();
 
-        // Create pipe for stdin (JUCE ChildProcess doesn't support stdin writing)
-        int pipeDescriptors[2];
-        if (pipe(pipeDescriptors) != 0)
+        // Create pipe for stdin (host→UI input events)
+        int stdinPipes[2];
+        if (pipe(stdinPipes) != 0)
         {
-            DBG("IOSurfaceProvider: Failed to create pipe");
+            DBG("IOSurfaceProvider: Failed to create stdin pipe");
             return false;
         }
+
+        // Create named pipe (FIFO) for UI→Host IPC
+        // Use pid-based path to avoid conflicts
+        ipcFifoPath = "/tmp/cmpui-ipc-" + std::to_string(getpid()) + ".fifo";
+        unlink(ipcFifoPath.c_str());  // Remove if exists
+        if (mkfifo(ipcFifoPath.c_str(), 0600) != 0)
+        {
+            DBG("IOSurfaceProvider: Failed to create IPC FIFO");
+            close(stdinPipes[0]);
+            close(stdinPipes[1]);
+            return false;
+        }
+        std::string ipcArg = "--ipc-pipe=" + ipcFifoPath;
 
         childPid = fork();
         
         if (childPid == 0)
         {
             // Child process
-            close(pipeDescriptors[1]);  // Close write end
-            dup2(pipeDescriptors[0], STDIN_FILENO);  // Redirect stdin
-            close(pipeDescriptors[0]);
+            close(stdinPipes[1]);   // Close write end of stdin pipe
+            
+            dup2(stdinPipes[0], STDIN_FILENO);   // Redirect stdin
+            close(stdinPipes[0]);
 
             if (!workDir.empty())
                 chdir(workDir.c_str());
@@ -192,6 +208,7 @@ public:
                   execPath.c_str(), 
                   "--embed", 
                   surfaceArg.c_str(), 
+                  ipcArg.c_str(),
                   nullptr);
             
             // If exec fails, exit child
@@ -200,8 +217,11 @@ public:
         else if (childPid > 0)
         {
             // Parent process
-            close(pipeDescriptors[0]);  // Close read end
-            stdinPipeFD = pipeDescriptors[1];
+            close(stdinPipes[0]);   // Close read end of stdin pipe
+            
+            stdinPipeFD = stdinPipes[1];
+            // Note: ipcPipeFD will be opened lazily by UIReceiver to avoid blocking here
+            // The UIReceiver will open the FIFO path directly
             
             DBG("IOSurfaceProvider: Launched child PID " + juce::String(childPid) 
                 + " with surface ID " + juce::String(IOSurfaceGetID(surface)));
@@ -210,8 +230,10 @@ public:
         else
         {
             DBG("IOSurfaceProvider: Fork failed");
-            close(pipeDescriptors[0]);
-            close(pipeDescriptors[1]);
+            close(stdinPipes[0]);
+            close(stdinPipes[1]);
+            unlink(ipcFifoPath.c_str());
+            ipcFifoPath.clear();
             return false;
         }
 #else
@@ -223,11 +245,23 @@ public:
     void stopChild()
     {
 #if JUCE_MAC
-        // Close stdin pipe first (signals EOF to child)
+        // Close pipes first (signals EOF to child)
         if (stdinPipeFD >= 0)
         {
             close(stdinPipeFD);
             stdinPipeFD = -1;
+        }
+        if (ipcPipeFD >= 0)
+        {
+            close(ipcPipeFD);
+            ipcPipeFD = -1;
+        }
+        
+        // Clean up FIFO
+        if (!ipcFifoPath.empty())
+        {
+            unlink(ipcFifoPath.c_str());
+            ipcFifoPath.clear();
         }
         
         // Terminate child process
@@ -256,6 +290,16 @@ public:
         return stdinPipeFD;
     }
 
+    int getIPCPipeFD() const
+    {
+        return ipcPipeFD;
+    }
+    
+    const std::string& getIPCFifoPath() const
+    {
+        return ipcFifoPath;
+    }
+
 private:
     void releaseSurface()
     {
@@ -279,6 +323,8 @@ private:
     pid_t childPid = 0;
 #endif
     int stdinPipeFD = -1;
+    int ipcPipeFD = -1;
+    std::string ipcFifoPath;
     int surfaceWidth = 0;
     int surfaceHeight = 0;
 };
@@ -345,4 +391,14 @@ bool IOSurfaceProvider::isChildRunning() const
 int IOSurfaceProvider::getInputPipeFD() const 
 { 
     return pImpl->getInputPipeFD(); 
+}
+
+int IOSurfaceProvider::getIPCPipeFD() const 
+{ 
+    return pImpl->getIPCPipeFD(); 
+}
+
+juce::String IOSurfaceProvider::getIPCFifoPath() const 
+{ 
+    return juce::String(pImpl->getIPCFifoPath()); 
 }

@@ -2,6 +2,7 @@ package cmpui
 
 import androidx.compose.ui.window.Window
 import androidx.compose.ui.window.application
+import cmpui.bridge.UISender
 import cmpui.bridge.renderer.runIOSurfaceRenderer
 
 /**
@@ -20,6 +21,9 @@ fun main(args: Array<String>) {
     if (embedMode) {
         // Hide from Dock - we're a background renderer for the host
         System.setProperty("apple.awt.UIElement", "true")
+        
+        // Initialize IPC sender with pipe path from args
+        UISender.initialize(args)
         
         // Parse --iosurface-id=<id> from host
         val surfaceID = args

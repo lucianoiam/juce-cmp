@@ -2,7 +2,7 @@
 
 #include <juce_audio_processors/juce_audio_processors.h>
 #include "PluginProcessor.h"
-#include "IOSurfaceComponent.h"
+#include "bridge/IOSurfaceComponent.h"
 
 /**
  * Plugin Editor - hosts the IOSurfaceComponent that displays Compose UI.

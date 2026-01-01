@@ -35,12 +35,13 @@ target_sources(CMPEmbedHost
         PluginProcessor.h
         PluginEditor.cpp
         PluginEditor.h
-        IOSurfaceComponent.mm
-        IOSurfaceComponent.h
-        IOSurfaceProvider.mm
-        IOSurfaceProvider.h
-        InputSender.cpp
-        InputSender.h
+        bridge/IOSurfaceComponent.mm
+        bridge/IOSurfaceComponent.h
+        bridge/IOSurfaceProvider.mm
+        bridge/IOSurfaceProvider.h
+        bridge/InputSender.cpp
+        bridge/InputSender.h
+        bridge/UIReceiver.h
 )
 
 target_include_directories(CMPEmbedHost

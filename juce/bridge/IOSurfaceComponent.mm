@@ -294,6 +294,14 @@ void IOSurfaceComponent::launchChildProcess()
     if (surfaceProvider.launchChild(rendererPath.getFullPathName().toStdString()))
     {
         inputSender.setPipeFD(surfaceProvider.getInputPipeFD());
+        
+        // Set up UI→Host message receiver
+        uiReceiver.setParamHandler([this](uint32_t paramId, float value) {
+            if (setParamCallback)
+                setParamCallback(paramId, value);
+        });
+        uiReceiver.start(surfaceProvider.getIPCFifoPath());
+        
         childLaunched = true;
 #if JUCE_MAC
         attachNativeView();

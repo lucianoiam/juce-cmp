@@ -40,6 +40,13 @@ public:
     void getStateInformation(juce::MemoryBlock& destData) override;
     void setStateInformation(const void* data, int sizeInBytes) override;
 
+    /// Shape parameter: 0 = sine, 1 = square, in-between = morph
+    std::atomic<float> shape { 0.0f };
+
 private:
+    double currentSampleRate = 44100.0;
+    double phase = 0.0;
+    static constexpr double frequency = 440.0;
+    
     JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR(PluginProcessor)
 };

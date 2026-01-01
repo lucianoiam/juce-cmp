@@ -26,6 +26,7 @@ import org.jetbrains.compose.ui.tooling.preview.Preview
 import cmpui.composeapp.generated.resources.Res
 import cmpui.composeapp.generated.resources.compose_multiplatform
 import cmpui.widgets.Knob
+import cmpui.bridge.UISender
 
 @Composable
 @Preview
@@ -61,14 +62,23 @@ fun App() {
             
             Spacer(modifier = Modifier.height(16.dp))
             
-            // Knob demo
-            var dialValue by remember { mutableStateOf(0.5f) }
+            // Shape knob - controls oscillator waveform (0=sine, 1=square)
+            var shapeValue by remember { mutableStateOf(0f) }
+            Text(
+                text = "Shape",
+                style = MaterialTheme.typography.labelMedium
+            )
             Knob(
-                value = dialValue,
-                onValueChange = { dialValue = it }
+                value = shapeValue,
+                onValueChange = { 
+                    shapeValue = it
+                    UISender.setParameter(0, it)  // paramId 0 = shape
+                }
             )
             Text(
-                text = "Value: ${(dialValue * 100).toInt()}%",
+                text = if (shapeValue < 0.1f) "Sine" 
+                       else if (shapeValue > 0.9f) "Square" 
+                       else "${(shapeValue * 100).toInt()}%",
                 style = MaterialTheme.typography.bodySmall
             )
             

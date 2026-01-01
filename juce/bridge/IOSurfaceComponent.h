@@ -3,6 +3,8 @@
 #include <juce_gui_basics/juce_gui_basics.h>
 #include "IOSurfaceProvider.h"
 #include "InputSender.h"
+#include "UIReceiver.h"
+#include <functional>
 
 /**
  * IOSurfaceComponent - JUCE Component that displays an IOSurface from a child process.
@@ -18,6 +20,10 @@ class IOSurfaceComponent : public juce::Component,
 public:
     IOSurfaceComponent();
     ~IOSurfaceComponent() override;
+
+    /// Set callback for when UI sends parameter changes
+    using SetParamCallback = std::function<void(uint32_t paramId, float value)>;
+    void onSetParameter(SetParamCallback callback) { setParamCallback = std::move(callback); }
 
     void resized() override;
     void paint(juce::Graphics& g) override;
@@ -51,6 +57,8 @@ private:
 
     IOSurfaceProvider surfaceProvider;
     InputSender inputSender;
+    UIReceiver uiReceiver;
+    SetParamCallback setParamCallback;
 
     bool childLaunched = false;
 

@@ -13,6 +13,14 @@ PluginEditor::PluginEditor(PluginProcessor& p)
     setResizable(true, true);
     setResizeLimits(400, 300, 2048, 2048);
     
+    // Wire up UI→Host parameter changes
+    surfaceComponent.onSetParameter([&p](uint32_t paramId, float value) {
+        switch (paramId) {
+            case 0: p.shape.store(value); break;
+            // Add more parameters here as needed
+        }
+    });
+    
     addAndMakeVisible(surfaceComponent);
 }
 

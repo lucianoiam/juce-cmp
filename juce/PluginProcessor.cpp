@@ -71,7 +71,9 @@ void PluginProcessor::changeProgramName(int index, const juce::String& newName)
 
 void PluginProcessor::prepareToPlay(double sampleRate, int samplesPerBlock)
 {
-    juce::ignoreUnused(sampleRate, samplesPerBlock);
+    juce::ignoreUnused(samplesPerBlock);
+    currentSampleRate = sampleRate;
+    phase = 0.0;
 }
 
 void PluginProcessor::releaseResources()
@@ -95,8 +97,34 @@ void PluginProcessor::processBlock(juce::AudioBuffer<float>& buffer, juce::MidiB
     juce::ignoreUnused(midiMessages);
     juce::ScopedNoDenormals noDenormals;
 
-    // Passthrough - do nothing to audio
-    // Input is already in the buffer, output goes to the same buffer
+    const int numChannels = buffer.getNumChannels();
+    const int numSamples = buffer.getNumSamples();
+    const double phaseIncrement = frequency / currentSampleRate;
+    const float shapeValue = shape.load();
+    
+    for (int sample = 0; sample < numSamples; ++sample)
+    {
+        // Generate sine wave
+        const float sine = static_cast<float>(std::sin(phase * 2.0 * juce::MathConstants<double>::pi));
+        
+        // Generate square wave (sign of sine)
+        const float square = sine >= 0.0f ? 1.0f : -1.0f;
+        
+        // Morph between sine and square based on shape parameter
+        const float out = sine * (1.0f - shapeValue) + square * shapeValue;
+        
+        // Scale down to reasonable volume
+        const float scaledOut = out * 0.3f;
+        
+        // Write to all channels
+        for (int channel = 0; channel < numChannels; ++channel)
+            buffer.setSample(channel, sample, scaledOut);
+        
+        // Advance phase
+        phase += phaseIncrement;
+        if (phase >= 1.0)
+            phase -= 1.0;
+    }
 }
 
 bool PluginProcessor::hasEditor() const

@@ -1,7 +1,7 @@
 #pragma once
 
 #include <cstdint>
-#include "../common/input_protocol.h"
+#include "../../common/input_protocol.h"
 
 /**
  * InputSender - Sends binary input events to the child process via pipe.
