@@ -55,7 +55,8 @@ static CVReturn displayLinkCallback(CVDisplayLinkRef displayLink,
     self = [super initWithFrame:frame];
     if (self) {
         self.wantsLayer = YES;
-        self.layer.contentsGravity = kCAGravityResize;
+        // Pin content to top-left, no stretching during resize
+        self.layer.contentsGravity = kCAGravityTopLeft;
         
         // Create and start CVDisplayLink for vsync-synchronized updates
         CVDisplayLinkCreateWithActiveCGDisplays(&_displayLink);
@@ -79,6 +80,8 @@ static CVReturn displayLinkCallback(CVDisplayLinkRef displayLink,
 - (void)updateLayer {
     if (self.surface) {
         self.layer.contents = (__bridge id)self.surface;
+        // Display surface pixels 1:1 as points
+        self.layer.contentsScale = 1.0;
         [self.layer setContentsChanged];
     }
 }
