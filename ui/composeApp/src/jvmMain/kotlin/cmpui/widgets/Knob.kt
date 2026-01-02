@@ -35,11 +35,11 @@ fun Knob(
     value: Float,
     onValueChange: (Float) -> Unit,
     modifier: Modifier = Modifier,
-    size: Dp = 80.dp,
+    size: Dp = 60.dp,
     trackColor: Color = Color.DarkGray,
     valueColor: Color = Color(0xFF00BCD4),  // Cyan
     indicatorColor: Color = Color.White,
-    trackWidth: Dp = 6.dp,
+    trackWidth: Dp = 5.dp,
     sensitivity: Float = 0.005f
 ) {
     val sweepAngle = 270f  // Total rotation range in degrees
