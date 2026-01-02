@@ -11,7 +11,7 @@ fi
 
 # Find and run the standalone app
 if [ "$(uname)" == "Darwin" ]; then
-    APP="build/juce/CMPEmbedHost_artefacts/Standalone/CMP Embed Host.app/Contents/MacOS/CMP Embed Host"
+    APP="build/juce/CMPEmbedHost_artefacts/Standalone/CMP Embed.app/Contents/MacOS/CMP Embed"
     if [ -f "$APP" ]; then
         exec "$APP"
     else

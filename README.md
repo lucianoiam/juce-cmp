@@ -1,15 +1,18 @@
 # CMP Embed
 
-Embeds a Compose Multiplatform (Compose Desktop) UI inside a JUCE application or native macOS application using IOSurface for zero-copy GPU rendering and binary IPC for input forwarding.
+Embeds a Compose Multiplatform (Compose Desktop) UI inside a JUCE audio plugin using IOSurface for zero-copy GPU rendering and binary IPC for input forwarding.
 
 ## Quick Start
 
 ```bash
-# JUCE app
-./scripts/build.sh && ./scripts/run_juce.sh
+# Build everything
+./scripts/build.sh
 
-# Standalone native app
-./scripts/build.sh && ./scripts/run_standalone.sh
+# Install AU plugin to ~/Library/Audio/Plug-Ins/Components/
+./scripts/install.sh
+
+# Run standalone app for testing
+./scripts/run_juce.sh
 ```
 
 **Prerequisites:**
@@ -20,13 +23,9 @@ Embeds a Compose Multiplatform (Compose Desktop) UI inside a JUCE application or
 
 ## Architecture
 
-Two host applications are provided:
-
-### JUCE Host
-
 ```
 ┌─────────────────────────────────────────────────────────┐
-│  JUCE Standalone Application                            │
+│  JUCE Plugin (AU / Standalone)                          │
 │  - IOSurfaceComponent creates shared GPU surface        │
 │  - SurfaceView (NSView) displays via CALayer            │
 │  - CVDisplayLink for vsync-synchronized refresh         │
@@ -43,34 +42,9 @@ Two host applications are provided:
 └─────────────────────────────────────────────────────────┘
 ```
 
-### Standalone Host (Native macOS)
+**Rendering:** The plugin creates an IOSurface and passes its ID to the child process. The Compose UI uses Skia's Metal backend to render directly to the shared surface—no CPU copies involved. Rendering is invalidation-based: frames are only rendered when the scene changes.
 
-```
-┌─────────────────────────────────────────────────────────┐
-│  Standalone (native macOS app)                          │
-│  - Creates IOSurface (shared GPU memory)                │
-│  - Displays it via CALayer                              │
-│  - Captures input events → sends via stdin pipe         │
-│  - Launches UI as child process                         │
-│  - Handles window resize with delayed swap              │
-└─────────────────┬───────────────────────────────────────┘
-                  │ IOSurface ID (arg)    Input events (stdin)
-                  │        ↓                     ↓
-                  ▼────────────────────────────────────────
-┌─────────────────────────────────────────────────────────┐
-│  UI (Compose Desktop / Skia / Metal)                    │
-│  - Renders directly to IOSurface-backed Metal texture   │
-│  - Receives input events, injects into ComposeScene     │
-│  - Handles resize: recreates resources for new surface  │
-│  - Zero CPU pixel copies, invalidation-based rendering  │
-└─────────────────────────────────────────────────────────┘
-```
-
-**Rendering:** The standalone app creates an IOSurface and passes its ID to the child process. The Compose UI uses Skia's Metal backend to render directly to the shared surface—no CPU copies involved. Rendering is invalidation-based: frames are only rendered when the scene changes.
-
-**Input:** Mouse/keyboard events are captured in the standalone app and sent to the child via a 16-byte binary protocol over stdin. The UI deserializes and injects them into the Compose scene.
-
-**Resize:** Window resizing uses delayed swap to avoid flicker. The standalone creates a new IOSurface at the target size, tells the child to render to it, waits one frame (~17ms) for the child to complete rendering, then swaps the displayed surface.
+**Input:** Mouse/keyboard events are captured in the plugin and sent to the child via a 16-byte binary protocol over stdin. The UI deserializes and injects them into the Compose scene.
 
 ## Build
 
@@ -81,27 +55,27 @@ Two host applications are provided:
 This builds:
 1. **Native Metal renderer** (`libiosurface_renderer.dylib`)
 2. **Compose UI app** (`cmpui.app` with bundled JRE)
-3. **JUCE audio plugin host** (`CMP Embed Host.app` - fetches JUCE 8.0.4 via CMake)
-4. **Standalone app** (`standalone.app`)
+3. **AU plugin** (`CMP Embed.component` - uses JUCE 8.0.4)
+4. **Standalone app** (`CMP Embed.app` for testing outside DAW)
+
+## Install AU Plugin
+
+```bash
+./scripts/install.sh
+```
+
+This copies `CMP Embed.component` to `~/Library/Audio/Plug-Ins/Components/` and resets the audio component cache. Restart your DAW and rescan plugins.
+
+To validate: `auval -v aumu CMPh CMPe`
 
 ## Run
 
 ```bash
-# JUCE host (recommended for plugin development)
+# Run standalone for testing
 ./scripts/run_juce.sh
-
-# Standalone host
-./scripts/run_standalone.sh
 ```
 
-Or after building:
-```bash
-# JUCE
-./build/juce/CMPEmbedHost_artefacts/Standalone/"CMP Embed Host.app"/Contents/MacOS/"CMP Embed Host"
-
-# Standalone
-./build/standalone/standalone.app/Contents/MacOS/standalone
-```
+Or use the AU plugin in any DAW after running `./scripts/install.sh`.
 
 ## Project Structure
 
@@ -109,7 +83,7 @@ Or after building:
 common/                # Cross-platform shared code
   input_protocol.h     # Binary input event protocol (16 bytes/event)
 
-juce/                  # JUCE audio plugin host
+juce/                  # JUCE audio plugin
   PluginProcessor.cpp/h    # Passthrough audio processor
   PluginEditor.cpp/h       # Editor hosting IOSurfaceComponent
   IOSurfaceComponent.mm/h  # Displays IOSurface, captures input
@@ -117,36 +91,31 @@ juce/                  # JUCE audio plugin host
   InputSender.cpp/h        # Sends input events via stdin pipe
   CMakeLists.txt           # Fetches JUCE 8.0.4, builds plugin
 
-standalone/            # Native macOS standalone application
-  main.m               # Window, IOSurface display, input capture
-  iosurface_provider.m # IOSurface creation and child process launch
-  input_cocoa.h/.m     # Input event sender (macOS implementation)
-
 ui/composeApp/         # Kotlin Multiplatform Compose application
   src/jvmMain/
     kotlin/cmpui/
-      main.kt          # Entry point (standalone or embedded mode)
-      App.kt           # Compose UI (vanilla demo app)
+      main.kt          # Entry point
+      App.kt           # Compose UI (demo app)
       input/           # Input event handling
-        InputEvent.kt      # Event data classes
         InputReceiver.kt   # Reads binary events from stdin
         InputDispatcher.kt # Injects events into ComposeScene
       renderer/        # IOSurface rendering
         IOSurfaceRendererGPU.kt  # Zero-copy Metal path (default)
-        IOSurfaceRendererCPU.kt  # CPU fallback (--disable-gpu)
     cpp/
       iosurface_renderer.m       # Native Metal bridge for Skia
 
+standalone/            # Native macOS app (for exploring foreign process embedding)
+
 scripts/
-  build.sh             # Build everything (CMake orchestrated)
-  run_juce.sh          # Build and run JUCE host
-  run_standalone.sh    # Build and run standalone app
+  build.sh             # Build everything
+  install.sh           # Install AU to ~/Library/Audio/Plug-Ins/Components/
+  run_juce.sh          # Build and run standalone app
 ```
 
 ## Flags
 
 The UI app supports:
-- `--embed` - Run as embedded renderer (required when launched by standalone)
+- `--embed` - Run as embedded renderer (used when launched by plugin)
 - `--iosurface-id=<id>` - IOSurface to render to
 - `--disable-gpu` - Use CPU software rendering instead of Metal
 
@@ -169,10 +138,9 @@ Events are 16-byte binary structs sent over stdin (see `common/input_protocol.h`
 ## Future
 
 See [TODO.txt](TODO.txt) for planned enhancements including:
-- HiDPI/Retina support
 - Bidirectional IPC (cursor, clipboard)
 - Windows/Linux platform support
-- AU/VST3 plugin builds (currently Standalone only)
+- VST3 plugin build
 
 ## License
 

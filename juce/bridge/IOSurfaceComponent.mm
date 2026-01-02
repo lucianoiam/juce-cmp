@@ -293,23 +293,13 @@ void IOSurfaceComponent::launchChildProcess()
     if (!surfaceProvider.createSurface(pixelW, pixelH))
         return;
 
-    // Find the Compose UI app relative to this executable.
-    // Path: build/juce/CMPEmbedHost_artefacts/Standalone/CMP Embed Host.app/
-    //       Contents/MacOS/CMP Embed Host
-    // Target: ui/composeApp/build/compose/binaries/main/app/cmpui.app/
-    //         Contents/MacOS/cmpui
-    // This navigates up 8 levels to reach project root.
-    // TODO: Make this configurable or bundle the UI app within the plugin.
+    // Find the CMP UI app bundled inside this plugin's Resources folder.
+    // Structure: PluginName.app/Contents/Resources/cmpui.app/Contents/MacOS/cmpui
+    // or:        PluginName.component/Contents/Resources/cmpui.app/Contents/MacOS/cmpui
     auto execFile = juce::File::getSpecialLocation(juce::File::currentExecutableFile);
-    auto projectRoot = execFile.getParentDirectory()  // MacOS
-                               .getParentDirectory()  // Contents
-                               .getParentDirectory()  // CMP Embed Host.app
-                               .getParentDirectory()  // Standalone
-                               .getParentDirectory()  // CMPEmbedHost_artefacts
-                               .getParentDirectory()  // juce
-                               .getParentDirectory()  // build
-                               .getParentDirectory(); // project root
-    auto rendererPath = projectRoot.getChildFile("ui/composeApp/build/compose/binaries/main/app/cmpui.app/Contents/MacOS/cmpui");
+    auto pluginBundle = execFile.getParentDirectory()  // MacOS
+                                .getParentDirectory(); // Contents
+    auto rendererPath = pluginBundle.getChildFile("Resources/cmpui.app/Contents/MacOS/cmpui");
     
     if (!rendererPath.existsAsFile())
         return;

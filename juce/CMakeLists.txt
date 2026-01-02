@@ -20,11 +20,11 @@ juce_add_plugin(CMPEmbedHost
     BUNDLE_ID "com.cmpembed.host"
     PLUGIN_MANUFACTURER_CODE CMPe
     PLUGIN_CODE CMPh
-    FORMATS Standalone  # Start with Standalone, add AU VST3 later
-    PRODUCT_NAME "CMP Embed Host"
-    NEEDS_MIDI_INPUT FALSE
+    FORMATS Standalone AU
+    PRODUCT_NAME "CMP Embed"
+    NEEDS_MIDI_INPUT TRUE
     NEEDS_MIDI_OUTPUT FALSE
-    IS_SYNTH FALSE
+    IS_SYNTH TRUE
     IS_MIDI_EFFECT FALSE
     EDITOR_WANTS_KEYBOARD_FOCUS TRUE
 )
@@ -72,5 +72,24 @@ if(APPLE)
     target_link_libraries(CMPEmbedHost PRIVATE 
         "-framework IOSurface"
         "-framework CoreVideo"
+    )
+    
+    # Copy CMP UI app bundle into each plugin's Resources folder
+    set(CMP_UI_APP "${CMAKE_SOURCE_DIR}/ui/composeApp/build/compose/binaries/main/app/cmpui.app")
+    
+    # Standalone
+    add_custom_command(TARGET CMPEmbedHost_Standalone POST_BUILD
+        COMMAND ${CMAKE_COMMAND} -E copy_directory
+            "${CMP_UI_APP}"
+            "$<TARGET_BUNDLE_DIR:CMPEmbedHost_Standalone>/Contents/Resources/cmpui.app"
+        COMMENT "Copying CMP UI to Standalone bundle"
+    )
+    
+    # AU
+    add_custom_command(TARGET CMPEmbedHost_AU POST_BUILD
+        COMMAND ${CMAKE_COMMAND} -E copy_directory
+            "${CMP_UI_APP}"
+            "$<TARGET_BUNDLE_DIR:CMPEmbedHost_AU>/Contents/Resources/cmpui.app"
+        COMMENT "Copying CMP UI to AU bundle"
     )
 endif()

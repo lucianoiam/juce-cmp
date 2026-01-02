@@ -22,4 +22,7 @@ cmake --build build --target standalone
 echo "=== Building JUCE host ==="
 cmake --build build --target CMPEmbedHost_Standalone
 
+echo "=== Building AU plugin ==="
+cmake --build build --target CMPEmbedHost_AU
+
 echo "=== Build complete ==="
