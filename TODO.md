@@ -12,7 +12,6 @@ RENDERING
 ---------
 [x] Window resize handling - recreate IOSurface at new size
 [x] HiDPI/Retina support - pass scale factor, render at 2x
-[ ] Triple buffering to eliminate any remaining tearing
 
 ARCHITECTURE
 ------------

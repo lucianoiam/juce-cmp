@@ -137,7 +137,7 @@ Events are 16-byte binary structs sent over stdin (see `common/input_protocol.h`
 
 ## Future
 
-See [TODO.txt](TODO.txt) for planned enhancements including:
+See [TODO.md](TODO.md) for planned enhancements including:
 - Bidirectional IPC (cursor, clipboard)
 - Windows/Linux platform support
 - VST3 plugin build
