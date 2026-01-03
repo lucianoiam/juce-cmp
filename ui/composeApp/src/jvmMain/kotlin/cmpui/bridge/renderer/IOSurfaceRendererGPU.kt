@@ -77,7 +77,7 @@ private fun createRenderResources(
     
     val width = widthRef.value
     val height = heightRef.value
-    println("[GPU] IOSurface texture: ${width}x${height}, ptr=${Pointer.nativeValue(texturePtr)}")
+    // println("[GPU] IOSurface texture: ${width}x${height}, ptr=${Pointer.nativeValue(texturePtr)}")
     
     // Create Skia DirectContext using our Metal device/queue
     val directContext = DirectContext.makeMetal(
@@ -121,7 +121,7 @@ private fun createRenderResources(
  */
 @OptIn(InternalComposeUiApi::class)
 fun runIOSurfaceRendererGPU(surfaceID: Int, scaleFactor: Float = 1f, content: @Composable () -> Unit) {
-    println("[GPU] Initializing zero-copy Metal renderer (scale=$scaleFactor)...")
+    // println("[GPU] Initializing zero-copy Metal renderer (scale=$scaleFactor)...")
     
     // Create Metal context (device + command queue)
     val metalContext = MetalRendererLib.INSTANCE.createMetalContext()
@@ -134,7 +134,7 @@ fun runIOSurfaceRendererGPU(surfaceID: Int, scaleFactor: Float = 1f, content: @C
         val queuePtr = MetalRendererLib.INSTANCE.getMetalQueue(metalContext)
             ?: error("Failed to get Metal queue")
         
-        println("[GPU] Metal device=${Pointer.nativeValue(devicePtr)}, queue=${Pointer.nativeValue(queuePtr)}")
+        // println("[GPU] Metal device=${Pointer.nativeValue(devicePtr)}, queue=${Pointer.nativeValue(queuePtr)}")
         
         // Track if scene needs redraw (atomic for thread safety)
         val needsRedraw = java.util.concurrent.atomic.AtomicBoolean(true)
@@ -149,8 +149,8 @@ fun runIOSurfaceRendererGPU(surfaceID: Int, scaleFactor: Float = 1f, content: @C
         val inputReceiver = InputReceiver { event ->
             if (event.type == EventType.RESIZE) {
                 // Resize events handled specially - store for main loop
-                println("[GPU] Received resize event: ${event.width}x${event.height}, surfaceID=${event.newSurfaceID}")
-                System.out.flush()
+                // println("[GPU] Received resize event: ${event.width}x${event.height}, surfaceID=${event.newSurfaceID}")
+                // System.out.flush()
                 pendingResize.set(event)
             } else {
                 eventQueue.offer(event)
@@ -158,11 +158,11 @@ fun runIOSurfaceRendererGPU(surfaceID: Int, scaleFactor: Float = 1f, content: @C
             needsRedraw.set(true)
         }
         inputReceiver.start()
-        println("[GPU] Input receiver started")
+        // println("[GPU] Input receiver started")
         
         // Initial render resources
         var resources = createRenderResources(metalContext, devicePtr, queuePtr, surfaceID)
-        println("[GPU] Initial resources created: ${resources.width}x${resources.height}")
+        // println("[GPU] Initial resources created: ${resources.width}x${resources.height}")
         
         // Track current scale factor (may change on resize if window moves to different display)
         var currentScale = scaleFactor
@@ -176,7 +176,7 @@ fun runIOSurfaceRendererGPU(surfaceID: Int, scaleFactor: Float = 1f, content: @C
             invalidate = { needsRedraw.set(true) }
         )
         scene.setContent(content)
-        println("[GPU] ComposeScene created")
+        // println("[GPU] ComposeScene created")
         
         // Input dispatcher - needs scale factor to convert host points to Compose pixels
         var inputDispatcher = InputDispatcher(scene, currentScale)
@@ -184,8 +184,8 @@ fun runIOSurfaceRendererGPU(surfaceID: Int, scaleFactor: Float = 1f, content: @C
         try {
             // Render loop - Compose draws directly to IOSurface!
             runBlocking {
-                println("[GPU] Starting zero-copy render loop...")
-                System.out.flush()
+                // println("[GPU] Starting zero-copy render loop...")
+                // System.out.flush()
                 var frameCount = 0
                 
                 while (true) {
@@ -199,7 +199,7 @@ fun runIOSurfaceRendererGPU(surfaceID: Int, scaleFactor: Float = 1f, content: @C
                             val newHeight = resizeEvent.height
                             val newSurfaceID = resizeEvent.newSurfaceID
                             val newScale = resizeEvent.scaleFactor
-                            println("[GPU] Handling resize: ${newWidth}x${newHeight}, scale=$newScale, new surface ID=$newSurfaceID")
+                            // println("[GPU] Handling resize: ${newWidth}x${newHeight}, scale=$newScale, new surface ID=$newSurfaceID")
                             
                             // Close old resources (but keep the scene!)
                             resources.close()
@@ -212,7 +212,7 @@ fun runIOSurfaceRendererGPU(surfaceID: Int, scaleFactor: Float = 1f, content: @C
                             
                             // Update density if scale factor changed (e.g., window moved to different display)
                             if (newScale != currentScale) {
-                                println("[GPU] Scale factor changed: $currentScale -> $newScale")
+                                // println("[GPU] Scale factor changed: $currentScale -> $newScale")
                                 currentScale = newScale
                                 // Recreate scene with new density to handle scale change
                                 scene.close()
@@ -230,7 +230,7 @@ fun runIOSurfaceRendererGPU(surfaceID: Int, scaleFactor: Float = 1f, content: @C
                                 inputDispatcher.scaleFactor = currentScale
                             }
                             
-                            println("[GPU] Resize complete: ${resources.width}x${resources.height}")
+                            // println("[GPU] Resize complete: ${resources.width}x${resources.height}")
                             needsRedraw.set(true)
                         }
                         
@@ -251,16 +251,16 @@ fun runIOSurfaceRendererGPU(surfaceID: Int, scaleFactor: Float = 1f, content: @C
                         resources.skiaSurface.flushAndSubmit(syncCpu = true)
                         
                         if (frameCount == 0) {
-                            println("[GPU] First frame rendered - zero-copy active!")
-                            System.out.flush()
+                            // println("[GPU] First frame rendered - zero-copy active!")
+                            // System.out.flush()
                         }
                         frameCount++
                         needsRedraw.set(false)
                     } catch (e: CancellationException) {
                         throw e
                     } catch (e: Exception) {
-                        System.err.println("[GPU] Render error: ${e.message}")
-                        e.printStackTrace()
+                        // System.err.println("[GPU] Render error: ${e.message}")
+                        // e.printStackTrace()
                         delay(100)
                     }
                 }

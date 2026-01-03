@@ -28,13 +28,13 @@ void* createMetalContext(void) {
     @autoreleasepool {
         id<MTLDevice> device = MTLCreateSystemDefaultDevice();
         if (device == nil) {
-            fprintf(stderr, "[Metal] Failed to create Metal device\n");
+            // fprintf(stderr, "[Metal] Failed to create Metal device\n");
             return NULL;
         }
         
         id<MTLCommandQueue> commandQueue = [device newCommandQueue];
         if (commandQueue == nil) {
-            fprintf(stderr, "[Metal] Failed to create command queue\n");
+            // fprintf(stderr, "[Metal] Failed to create command queue\n");
             return NULL;
         }
         
@@ -46,9 +46,9 @@ void* createMetalContext(void) {
         CFRetain((__bridge CFTypeRef)device);
         CFRetain((__bridge CFTypeRef)commandQueue);
         
-        fprintf(stdout, "[Metal] Context created (device=%p, queue=%p)\n", 
-                (__bridge void*)device, (__bridge void*)commandQueue);
-        fflush(stdout);
+        // fprintf(stdout, "[Metal] Context created (device=%p, queue=%p)\n", 
+        //         (__bridge void*)device, (__bridge void*)commandQueue);
+        // fflush(stdout);
         
         return ctx;
     }
@@ -65,8 +65,8 @@ void destroyMetalContext(void* context) {
         CFRelease((__bridge CFTypeRef)ctx->device);
         
         free(ctx);
-        fprintf(stdout, "[Metal] Context destroyed\n");
-        fflush(stdout);
+        // fprintf(stdout, "[Metal] Context destroyed\n");
+        // fflush(stdout);
     }
 }
 
@@ -95,7 +95,7 @@ void* createIOSurfaceTexture(void* context, int surfaceID, int* outWidth, int* o
         // Lookup IOSurface
         IOSurfaceRef surface = IOSurfaceLookup((IOSurfaceID)surfaceID);
         if (surface == NULL) {
-            fprintf(stderr, "[Metal] Failed to lookup IOSurface ID %d\n", surfaceID);
+            // fprintf(stderr, "[Metal] Failed to lookup IOSurface ID %d\n", surfaceID);
             return NULL;
         }
         
@@ -120,16 +120,16 @@ void* createIOSurfaceTexture(void* context, int surfaceID, int* outWidth, int* o
         CFRelease(surface);
         
         if (texture == nil) {
-            fprintf(stderr, "[Metal] Failed to create IOSurface-backed texture\n");
+            // fprintf(stderr, "[Metal] Failed to create IOSurface-backed texture\n");
             return NULL;
         }
         
         // Retain the texture so it survives autorelease
         CFRetain((__bridge CFTypeRef)texture);
         
-        fprintf(stdout, "[Metal] Created IOSurface-backed texture %zux%zu (ptr=%p)\n", 
-                width, height, (__bridge void*)texture);
-        fflush(stdout);
+        // fprintf(stdout, "[Metal] Created IOSurface-backed texture %zux%zu (ptr=%p)\n", 
+        //         width, height, (__bridge void*)texture);
+        // fflush(stdout);
         
         return (__bridge void*)texture;
     }
@@ -142,8 +142,8 @@ void releaseIOSurfaceTexture(void* texturePtr) {
     @autoreleasepool {
         id<MTLTexture> texture = (__bridge id<MTLTexture>)texturePtr;
         CFRelease((__bridge CFTypeRef)texture);
-        fprintf(stdout, "[Metal] Released texture\n");
-        fflush(stdout);
+        // fprintf(stdout, "[Metal] Released texture\n");
+        // fflush(stdout);
     }
 }
 
