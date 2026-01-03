@@ -11,7 +11,7 @@
 /**
  * UIReceiver - Reads binary messages from UI process via named pipe (FIFO).
  *
- * Runs a background thread that opens the FIFO (blocking until writer connects),
+ * Runs a background thread that opens the FIFO (non-blocking to allow clean shutdown),
  * then reads UIMessageHeader + payload and dispatches to registered handlers.
  */
 class UIReceiver
@@ -33,7 +33,9 @@ public:
         running.store(true);
         
         readerThread = std::thread([this]() {
-            // Blocking open - waits for child to open write end
+            // Blocking open - waits for child to open write end.
+            // This is safe because stopChild() waits for child to exit first,
+            // which closes the FIFO and unblocks this open (or subsequent reads).
             fd = open(path.toRawUTF8(), O_RDONLY);
             if (fd < 0)
             {

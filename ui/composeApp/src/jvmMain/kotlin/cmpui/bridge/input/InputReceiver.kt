@@ -18,6 +18,9 @@ class InputReceiver(
     private var running = false
     private var thread: Thread? = null
     
+    /** Returns true if the receiver is still running (stdin not closed) */
+    val isRunning: Boolean get() = running
+    
     fun start() {
         if (running) return
         running = true
@@ -32,9 +35,10 @@ class InputReceiver(
                     while (bytesRead < 16 && running) {
                         val n = input.read(buffer, bytesRead, 16 - bytesRead)
                         if (n < 0) {
-                            // EOF - parent closed pipe
+                            // EOF - parent closed pipe, exit immediately
                             running = false
-                            break
+                            // Force JVM exit - other threads may keep it alive
+                            kotlin.system.exitProcess(0)
                         }
                         bytesRead += n
                     }

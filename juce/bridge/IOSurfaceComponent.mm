@@ -235,7 +235,15 @@ IOSurfaceComponent::~IOSurfaceComponent()
     if (auto* topLevel = getTopLevelComponent())
         topLevel->removeComponentListener(this);
     stopTimer();
+    
+    // Stop child process first - this closes stdin (signaling EOF to child),
+    // then waits for child to exit. Once child exits, it closes its end of the
+    // FIFO, which unblocks the UIReceiver thread.
     surfaceProvider.stopChild();
+    
+    // Now stop UIReceiver - should exit immediately since child closed FIFO
+    uiReceiver.stop();
+    
 #if JUCE_MAC
     detachNativeView();
 #endif

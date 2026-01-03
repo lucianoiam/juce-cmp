@@ -67,7 +67,8 @@ fun runIOSurfaceRendererCPU(surfaceID: Int, scaleFactor: Float = 1f, content: @C
         System.out.flush()
         var frameCount = 0
         
-        while (true) {
+        // Run until stdin closes (host signals exit by closing pipe)
+        while (inputReceiver.isRunning) {
             try {
                 // Render Compose - returns org.jetbrains.skia.Image
                 val rendered = scene.render(System.nanoTime())

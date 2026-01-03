@@ -19,6 +19,7 @@
 #import <IOSurface/IOSurface.h>
 #include <fcntl.h>
 #include <sys/stat.h>
+#include <sys/wait.h>
 #endif
 
 class IOSurfaceProvider::Impl
@@ -247,30 +248,48 @@ public:
     void stopChild()
     {
 #if JUCE_MAC
-        // Close pipes first (signals EOF to child)
+        // Close stdin pipe first - signals EOF to child, causing it to exit
         if (stdinPipeFD >= 0)
         {
             close(stdinPipeFD);
             stdinPipeFD = -1;
         }
+        
+        // Wait for child to exit with timeout, then force kill
+        if (childPid > 0)
+        {
+            int status;
+            // Give child 200ms to exit gracefully
+            for (int i = 0; i < 20; ++i)
+            {
+                pid_t result = waitpid(childPid, &status, WNOHANG);
+                if (result != 0) {
+                    // Child exited or error
+                    childPid = 0;
+                    break;
+                }
+                usleep(10000);  // 10ms
+            }
+            
+            // If still alive, force kill
+            if (childPid > 0)
+            {
+                kill(childPid, SIGKILL);
+                waitpid(childPid, &status, 0);
+                childPid = 0;
+            }
+        }
+        
+        // Close IPC pipe and clean up FIFO after child has exited
         if (ipcPipeFD >= 0)
         {
             close(ipcPipeFD);
             ipcPipeFD = -1;
         }
-        
-        // Clean up FIFO
         if (!ipcFifoPath.empty())
         {
             unlink(ipcFifoPath.c_str());
             ipcFifoPath.clear();
-        }
-        
-        // Terminate child process
-        if (childPid > 0)
-        {
-            kill(childPid, SIGTERM);
-            childPid = 0;
         }
 #endif
     }
