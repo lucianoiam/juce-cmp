@@ -1,6 +1,11 @@
 cmake_minimum_required(VERSION 3.15)
 project(juce-cmp)
 
+# Default to Debug build for development
+if(NOT CMAKE_BUILD_TYPE)
+    set(CMAKE_BUILD_TYPE Debug CACHE STRING "Build type" FORCE)
+endif()
+
 # Paths
 set(UI_DIR "${CMAKE_SOURCE_DIR}/ui")
 set(NATIVE_RENDERER_SRC "${UI_DIR}/composeApp/src/jvmMain/cpp/iosurface_renderer.m")
