@@ -40,12 +40,23 @@ else()
     set(GRADLE_CMD ./gradlew)
 endif()
 
-add_custom_target(ui
+# Glob all Kotlin source files to track changes
+file(GLOB_RECURSE KOTLIN_SOURCES "${UI_DIR}/composeApp/src/*.kt")
+list(APPEND KOTLIN_SOURCES "${UI_DIR}/composeApp/build.gradle.kts")
+
+# Use a stamp file to track if build is needed (Gradle handles its own incrementality)
+set(UI_STAMP_FILE "${CMAKE_CURRENT_BINARY_DIR}/ui.stamp")
+
+add_custom_command(
+    OUTPUT "${UI_STAMP_FILE}"
     COMMAND ${GRADLE_CMD} :composeApp:createDistributable --quiet
+    COMMAND ${CMAKE_COMMAND} -E touch "${UI_STAMP_FILE}"
     WORKING_DIRECTORY "${UI_DIR}"
+    DEPENDS ${KOTLIN_SOURCES} "${NATIVE_RENDERER_OUT}"
     COMMENT "Building Compose UI"
 )
-add_dependencies(ui native_renderer)
+
+add_custom_target(ui DEPENDS "${UI_STAMP_FILE}")
 
 #
 # 3. Standalone Application (native Cocoa demo)
