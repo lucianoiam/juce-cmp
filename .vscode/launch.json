@@ -5,7 +5,7 @@
       "name": "Debug JUCE Standalone",
       "type": "cppdbg",
       "request": "launch",
-      "program": "${workspaceFolder}/build/juce/juce-cmp_artefacts/Standalone/juce-cmp.app/Contents/MacOS/juce-cmp",
+      "program": "${workspaceFolder}/build/juce/juce-cmp_artefacts/Debug/Standalone/juce-cmp.app/Contents/MacOS/juce-cmp",
       "args": [],
       "cwd": "${workspaceFolder}",
       "preLaunchTask": "Build JUCE Plugin",
