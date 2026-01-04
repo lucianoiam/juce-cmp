@@ -15,7 +15,7 @@ juce_add_plugin(juce-cmp-demo
     PLUGIN_CODE CMPh
     FORMATS Standalone AU
     PRODUCT_NAME "juce-cmp-demo"
-    NEEDS_MIDI_INPUT TRUE
+    NEEDS_MIDI_INPUT FALSE
     NEEDS_MIDI_OUTPUT FALSE
     IS_SYNTH TRUE
     IS_MIDI_EFFECT FALSE
