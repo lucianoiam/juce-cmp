@@ -1,6 +1,6 @@
 # juce-cmp
 
-A JUCE module for embedding Compose Multiplatform UI in audio plugins using IOSurface for zero-copy GPU rendering.
+A JUCE module for embedding Compose Multiplatform UI in audio plugins.
 
 ## Quick Start
 
@@ -22,6 +22,8 @@ A JUCE module for embedding Compose Multiplatform UI in audio plugins using IOSu
 - Xcode Command Line Tools (`xcode-select --install`)
 
 ## Architecture
+
+The module uses IOSurface for zero-copy GPU rendering, enabling efficient integration between JUCE and Compose Multiplatform.
 
 ```
 ┌─────────────────────────────────────────────────────────┐
