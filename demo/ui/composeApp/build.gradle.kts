@@ -36,9 +36,17 @@ compose.desktop {
     application {
         mainClass = "juce_cmp.demo.MainKt"
 
+        jvmArgs += listOf(
+            "--enable-native-access=ALL-UNNAMED"
+        )
+
         nativeDistributions {
             packageName = "juce-cmp-demo"
             packageVersion = "1.0.0"
+            
+            jvmArgs += listOf(
+                "--enable-native-access=ALL-UNNAMED"
+            )
         }
     }
 }
