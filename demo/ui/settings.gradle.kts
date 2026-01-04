@@ -1,4 +1,4 @@
-rootProject.name = "CMPUI"
+rootProject.name = "juce-cmp-demo"
 enableFeaturePreview("TYPESAFE_PROJECT_ACCESSORS")
 
 pluginManagement {

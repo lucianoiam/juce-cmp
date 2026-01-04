@@ -40,8 +40,12 @@ compose.desktop {
 
         nativeDistributions {
             targetFormats(TargetFormat.Dmg, TargetFormat.Msi, TargetFormat.Deb)
-            packageName = "cmpui"
+            packageName = "juce-cmp-demo"
             packageVersion = "1.0.0"
         }
     }
+}
+
+compose.resources {
+    packageOfResClass = "juce_cmp.demo.resources"
 }

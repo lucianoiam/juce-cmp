@@ -26,8 +26,8 @@ import androidx.compose.ui.unit.dp
 import org.jetbrains.compose.resources.painterResource
 import org.jetbrains.compose.ui.tooling.preview.Preview
 
-import cmpui.composeapp.generated.resources.Res
-import cmpui.composeapp.generated.resources.compose_multiplatform
+import juce_cmp.demo.resources.Res
+import juce_cmp.demo.resources.compose_multiplatform
 import juce_cmp.UISender
 // Knob is in the same package, no import needed
 
