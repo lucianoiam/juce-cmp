@@ -86,14 +86,10 @@ void PluginEditor::paint(juce::Graphics& g)
                     0, 0, loadingPreviewImage.getWidth(), loadingPreviewImage.getHeight());
     }
     
-    // Draw loading text at bottom (50% between bottom edge and knob position)
-    // Knob is roughly at center (50%), so place text at 75% height
+    // Draw loading text centered on top of the image
     g.setColour(juce::Colours::black);
     g.setFont(juce::FontOptions(15.0f));
-    int textY = getHeight() * 3 / 4;  // 75% down
-    int textHeight = 20;
-    juce::Rectangle<int> textBounds(0, textY - textHeight/2, getWidth(), textHeight);
-    g.drawFittedText("Starting UI...", textBounds, juce::Justification::centred, 1);
+    g.drawFittedText("Starting UI...", getLocalBounds(), juce::Justification::centred, 1);
 }
 
 void PluginEditor::resized()
