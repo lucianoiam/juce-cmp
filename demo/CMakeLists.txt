@@ -11,8 +11,8 @@ list(APPEND CMAKE_MODULE_PATH "${CMAKE_SOURCE_DIR}")
 juce_add_plugin(juce-cmp-demo
     COMPANY_NAME "juce-cmp"
     BUNDLE_ID "com.juce-cmp.demo"
-    PLUGIN_MANUFACTURER_CODE CMPe
-    PLUGIN_CODE CMPh
+    PLUGIN_MANUFACTURER_CODE JCMm
+    PLUGIN_CODE JCMs
     FORMATS Standalone AU
     PRODUCT_NAME "juce-cmp-demo"
     NEEDS_MIDI_INPUT FALSE
