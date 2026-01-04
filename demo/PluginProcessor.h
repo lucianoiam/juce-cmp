@@ -6,14 +6,17 @@
 #include <juce_audio_processors/juce_audio_processors.h>
 
 /**
- * Passthrough AudioProcessor - does nothing to audio, just hosts the UI.
+ * AudioProcessor with shape parameter exposed to AU/VST hosts.
  * 
- * This processor exists to provide a standard JUCE plugin structure.
- * The real functionality is in the editor, which displays the Compose UI.
+ * Generates a tone that morphs between sine and square wave.
+ * The shape parameter is automatable and saved with plugin state.
  */
 class PluginProcessor : public juce::AudioProcessor
 {
 public:
+    static constexpr const char* PARAM_SHAPE_ID = "shape";
+    static constexpr const char* PARAM_SHAPE_NAME = "Shape";
+    
     PluginProcessor();
     ~PluginProcessor() override;
 
@@ -43,8 +46,8 @@ public:
     void getStateInformation(juce::MemoryBlock& destData) override;
     void setStateInformation(const void* data, int sizeInBytes) override;
 
-    /// Shape parameter: 0 = sine, 1 = square, in-between = morph
-    std::atomic<float> shape { 0.0f };
+    /// Shape parameter (0 = sine, 1 = square) - exposed to host
+    juce::AudioParameterFloat* shapeParameter = nullptr;
 
 private:
     double currentSampleRate = 44100.0;

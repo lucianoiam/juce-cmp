@@ -2,10 +2,10 @@
 // SPDX-License-Identifier: MIT
 
 /**
- * PluginProcessor - Passthrough audio processor for juce-cmp.
+ * PluginProcessor - Audio processor with shape parameter for juce-cmp demo.
  *
- * This processor does nothing to the audio - it exists purely to provide
- * a standard JUCE plugin structure. All functionality is in the editor.
+ * Generates a tone that morphs between sine and square wave based on the
+ * shape parameter, which is exposed to the AU/VST host for automation.
  */
 #include "PluginProcessor.h"
 #include "PluginEditor.h"
@@ -14,6 +14,13 @@ PluginProcessor::PluginProcessor()
     : AudioProcessor(BusesProperties()
                      .withOutput("Output", juce::AudioChannelSet::stereo(), true))
 {
+    addParameter(shapeParameter = new juce::AudioParameterFloat(
+        { PARAM_SHAPE_ID, 1 },
+        PARAM_SHAPE_NAME,
+        0.0f,   // min
+        1.0f,   // max
+        0.0f    // default: sine wave
+    ));
 }
 
 PluginProcessor::~PluginProcessor()
@@ -100,7 +107,7 @@ void PluginProcessor::processBlock(juce::AudioBuffer<float>& buffer, juce::MidiB
     const int numChannels = buffer.getNumChannels();
     const int numSamples = buffer.getNumSamples();
     const double phaseIncrement = frequency / currentSampleRate;
-    const float shapeValue = shape.load();
+    const float shapeValue = shapeParameter->get();
     
     for (int sample = 0; sample < numSamples; ++sample)
     {
@@ -139,12 +146,16 @@ juce::AudioProcessorEditor* PluginProcessor::createEditor()
 
 void PluginProcessor::getStateInformation(juce::MemoryBlock& destData)
 {
-    juce::ignoreUnused(destData);
+    auto xml = std::make_unique<juce::XmlElement>("State");
+    xml->setAttribute(PARAM_SHAPE_ID, static_cast<double>(shapeParameter->get()));
+    copyXmlToBinary(*xml, destData);
 }
 
 void PluginProcessor::setStateInformation(const void* data, int sizeInBytes)
 {
-    juce::ignoreUnused(data, sizeInBytes);
+    auto xml = getXmlFromBinary(data, sizeInBytes);
+    if (xml != nullptr && xml->hasTagName("State"))
+        *shapeParameter = static_cast<float>(xml->getDoubleAttribute(PARAM_SHAPE_ID, 0.0));
 }
 
 // Plugin instantiation

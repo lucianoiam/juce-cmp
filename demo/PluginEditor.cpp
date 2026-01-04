@@ -22,7 +22,10 @@ PluginEditor::PluginEditor(PluginProcessor& p)
     // Wire up UI→Host parameter changes
     surfaceComponent.onSetParameter([&p](uint32_t paramId, float value) {
         switch (paramId) {
-            case 0: p.shape.store(value); break;
+            case 0:
+                if (p.shapeParameter != nullptr)
+                    p.shapeParameter->setValueNotifyingHost(value);
+                break;
             // Add more parameters here as needed
         }
     });
