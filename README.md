@@ -2,7 +2,7 @@
 
 A JUCE module for embedding Compose Multiplatform UI in audio plugins.
 
-**Note:** Full disclosure: this project was vibe-coded entirely by Claude Opus 4.5. Human supervision pending—coming soon in v1.0.0.
+**Note:** this project was vibe-coded entirely by Claude Opus 4.5. Human supervision pending—coming soon in v1.0.0.
 
 ## Quick Start
 
