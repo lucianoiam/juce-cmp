@@ -2,10 +2,10 @@
   "version": "0.2.0",
   "configurations": [
     {
-      "name": "Debug JUCE Standalone",
+      "name": "Debug Demo Standalone",
       "type": "cppdbg",
       "request": "launch",
-      "program": "${workspaceFolder}/build/juce/juce-cmp_artefacts/Debug/Standalone/juce-cmp.app/Contents/MacOS/juce-cmp",
+      "program": "${workspaceFolder}/build/demo/juce-cmp-demo_artefacts/Debug/Standalone/juce-cmp-demo.app/Contents/MacOS/juce-cmp-demo",
       "args": [],
       "cwd": "${workspaceFolder}",
       "preLaunchTask": "Build JUCE Plugin",

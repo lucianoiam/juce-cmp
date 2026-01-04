@@ -222,6 +222,9 @@ static CVReturn displayLinkCallback(CVDisplayLinkRef displayLink,
 
 #endif
 
+namespace juce_cmp
+{
+
 IOSurfaceComponent::IOSurfaceComponent()
 {
     setOpaque(false);  // Allow parent to show through until child renders
@@ -477,4 +480,6 @@ bool IOSurfaceComponent::keyPressed(const juce::KeyPress& key) { inputSender.sen
 bool IOSurfaceComponent::keyStateChanged(bool isKeyDown) { juce::ignoreUnused(isKeyDown); return false; }
 void IOSurfaceComponent::focusGained(FocusChangeType cause) { juce::ignoreUnused(cause); inputSender.sendFocus(true); }
 void IOSurfaceComponent::focusLost(FocusChangeType cause) { juce::ignoreUnused(cause); inputSender.sendFocus(false); }
+
+}  // namespace juce_cmp
 

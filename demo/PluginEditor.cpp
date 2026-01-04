@@ -5,7 +5,6 @@
  * view covers it with the child process rendering.
  */
 #include "PluginEditor.h"
-#include "LoadingPreview.h"
 
 PluginEditor::PluginEditor(PluginProcessor& p)
     : AudioProcessorEditor(&p), processorRef(p)
@@ -15,7 +14,7 @@ PluginEditor::PluginEditor(PluginProcessor& p)
     setResizeLimits(400, 300, 2048, 2048);
     
     // Load the preview image from embedded data
-    loadingPreviewImage = juce::ImageFileFormat::loadFrom(loading_preview_png, loading_preview_png_len);
+    loadingPreviewImage = juce::ImageFileFormat::loadFrom(juce_cmp::loading_preview_png, juce_cmp::loading_preview_png_len);
     
     // Wire up UI→Host parameter changes
     surfaceComponent.onSetParameter([&p](uint32_t paramId, float value) {

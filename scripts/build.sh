@@ -1,6 +1,6 @@
 #!/bin/bash
 # Build script for juce-cmp
-# CMake orchestrates: Native renderer → UI (Compose) → Standalone → JUCE Host
+# CMake orchestrates: Native renderer → UI (Compose) → Demo plugin
 set -e
 cd "$(dirname "$0")/.."
 
@@ -16,13 +16,10 @@ cmake --build build --target native_renderer
 echo "=== Building Compose UI ==="
 cmake --build build --target ui
 
-echo "=== Building Standalone app ==="
-cmake --build build --target standalone
+echo "=== Building demo standalone ==="
+cmake --build build --target juce-cmp-demo_Standalone
 
-echo "=== Building JUCE host ==="
-cmake --build build --target juce-cmp_Standalone
-
-echo "=== Building AU plugin ==="
-cmake --build build --target juce-cmp_AU
+echo "=== Building demo AU plugin ==="
+cmake --build build --target juce-cmp-demo_AU
 
 echo "=== Build complete ==="

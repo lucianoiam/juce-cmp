@@ -1,12 +1,15 @@
 #pragma once
 
 #include <juce_core/juce_core.h>
-#include "../../common/ui_protocol.h"
+#include "ui_protocol.h"
 #include <functional>
 #include <thread>
 #include <atomic>
 #include <unistd.h>
 #include <fcntl.h>
+
+namespace juce_cmp
+{
 
 /**
  * UIReceiver - Reads binary messages from UI process via named pipe (FIFO).
@@ -129,3 +132,5 @@ private:
 
     JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR(UIReceiver)
 };
+
+}  // namespace juce_cmp

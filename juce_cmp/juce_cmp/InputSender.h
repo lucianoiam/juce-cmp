@@ -1,12 +1,15 @@
 #pragma once
 
 #include <cstdint>
-#include "../../common/input_protocol.h"
+#include "input_protocol.h"
+
+namespace juce_cmp
+{
 
 /**
  * InputSender - Sends binary input events to the child process via pipe.
- * 
- * Uses the protocol defined in common/input_protocol.h.
+ *
+ * Uses the protocol defined in input_protocol.h.
  * Thread-safe for use from JUCE message thread.
  */
 class InputSender
@@ -43,3 +46,5 @@ private:
     int pipeFD = -1;
     uint64_t startTime = 0;
 };
+
+}  // namespace juce_cmp

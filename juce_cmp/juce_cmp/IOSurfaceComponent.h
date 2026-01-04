@@ -6,9 +6,12 @@
 #include "UIReceiver.h"
 #include <functional>
 
+namespace juce_cmp
+{
+
 /**
  * IOSurfaceComponent - JUCE Component that displays an IOSurface from a child process.
- * 
+ *
  * Uses a native NSView subview for zero-copy IOSurface display, while the JUCE
  * Component itself (being "invisible") catches all input events and forwards them
  * to the child process.
@@ -73,3 +76,5 @@ private:
 
     JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR(IOSurfaceComponent)
 };
+
+}  // namespace juce_cmp

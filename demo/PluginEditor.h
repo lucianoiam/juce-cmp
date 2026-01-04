@@ -1,8 +1,8 @@
 #pragma once
 
 #include <juce_audio_processors/juce_audio_processors.h>
+#include <juce_cmp/juce_cmp.h>
 #include "PluginProcessor.h"
-#include "bridge/IOSurfaceComponent.h"
 
 /**
  * Plugin Editor - hosts the IOSurfaceComponent that displays Compose UI.
@@ -18,7 +18,7 @@ public:
 
 private:
     PluginProcessor& processorRef;
-    IOSurfaceComponent surfaceComponent;
+    juce_cmp::IOSurfaceComponent surfaceComponent;
     juce::Image loadingPreviewImage;
 
     JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR(PluginEditor)

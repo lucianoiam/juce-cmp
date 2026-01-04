@@ -1,7 +1,7 @@
 /**
  * InputSender - Writes binary input events to child process stdin.
  *
- * Events follow the 16-byte protocol defined in common/input_protocol.h.
+ * Events follow the 16-byte protocol defined in input_protocol.h.
  * The pipe is non-blocking on the write side; if the child isn't reading
  * fast enough, writes may block momentarily.
  */
@@ -11,6 +11,9 @@
 #if JUCE_MAC || JUCE_LINUX
 #include <unistd.h>
 #endif
+
+namespace juce_cmp
+{
 
 InputSender::InputSender()
 {
@@ -142,3 +145,5 @@ void InputSender::sendResize(int width, int height, float scale, uint32_t newSur
         pipeFD = -1;
 #endif
 }
+
+}  // namespace juce_cmp

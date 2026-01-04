@@ -5,10 +5,13 @@
 #include <string>
 #include <functional>
 
+namespace juce_cmp
+{
+
 /**
  * IOSurfaceProvider - Cross-platform abstraction for shared surface creation
  * and child process management.
- * 
+ *
  * On macOS: Uses IOSurface for zero-copy GPU sharing
  * On Windows: Will use DXGI shared textures (TODO)
  * On Linux: Will use shared memory or Vulkan external memory (TODO)
@@ -68,3 +71,5 @@ private:
     class Impl;
     std::unique_ptr<Impl> pImpl;
 };
+
+}  // namespace juce_cmp

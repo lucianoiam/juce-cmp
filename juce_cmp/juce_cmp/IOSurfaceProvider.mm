@@ -1,11 +1,11 @@
 /**
  * IOSurfaceProvider - Creates shared GPU memory and manages child process.
- * 
+ *
  * Uses JUCE APIs where possible:
  * - juce::File for path handling
  * - juce::String for string operations
  * - juce::Logger (DBG) for logging
- * 
+ *
  * Platform-specific code (macOS):
  * - IOSurface creation (no JUCE equivalent)
  * - fork/exec with stdin pipe (juce::ChildProcess doesn't support stdin writing)
@@ -21,6 +21,9 @@
 #include <sys/stat.h>
 #include <sys/wait.h>
 #endif
+
+namespace juce_cmp
+{
 
 class IOSurfaceProvider::Impl
 {
@@ -91,8 +94,8 @@ public:
         
         if (pendingSurface != nullptr)
         {
-            DBG("IOSurfaceProvider: Created pending surface " + juce::String(w) + "x" + juce::String(h) 
-                + ", ID=" + juce::String(IOSurfaceGetID(pendingSurface)));
+            //DBG("IOSurfaceProvider: Created pending surface " + juce::String(w) + "x" + juce::String(h) 
+            //    + ", ID=" + juce::String(IOSurfaceGetID(pendingSurface)));
             return IOSurfaceGetID(pendingSurface);
         }
         return 0;
@@ -419,7 +422,9 @@ int IOSurfaceProvider::getIPCPipeFD() const
     return pImpl->getIPCPipeFD(); 
 }
 
-juce::String IOSurfaceProvider::getIPCFifoPath() const 
-{ 
-    return juce::String(pImpl->getIPCFifoPath()); 
+juce::String IOSurfaceProvider::getIPCFifoPath() const
+{
+    return juce::String(pImpl->getIPCFifoPath());
 }
+
+}  // namespace juce_cmp
