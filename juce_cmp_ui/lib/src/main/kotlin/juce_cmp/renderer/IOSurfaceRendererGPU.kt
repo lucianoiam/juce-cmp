@@ -247,7 +247,6 @@ fun runIOSurfaceRendererGPU(surfaceID: Int, scaleFactor: Float = 1f, content: @C
                         
                         // Render Compose content to IOSurface
                         val canvas = resources.skiaSurface.canvas
-                        canvas.clear(Color.WHITE)
                         scene.render(canvas.asComposeCanvas(), frameStart)
                         
                         // Flush and SYNC - this waits for GPU to finish, which naturally

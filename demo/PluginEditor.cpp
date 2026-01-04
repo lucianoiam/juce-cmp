@@ -54,8 +54,9 @@ PluginEditor::~PluginEditor()
 
 void PluginEditor::paint(juce::Graphics& g)
 {
-    // Light purple background matching the Compose UI
-    g.fillAll(juce::Colour(0xFFE6D6F2));
+    // Background color for loading screen
+    // NOTE: This should match the Compose UI background color in UserInterface.kt (Color(0xFF6F97FF))
+    g.fillAll(juce::Colour(0xFF6F97FF));
     
     // Draw the loading preview image scaled to fit
     if (loadingPreviewImage.isValid())

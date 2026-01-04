@@ -134,6 +134,7 @@ fun FallingSnow() {
 fun Background() = Box(
     Modifier
         .fillMaxSize()
+        // NOTE: This should match the loading screen background in PluginEditor.cpp (juce::Colour(0xFF6F97FF))
         .background(Color(0xFF6F97FF))
 )
 
