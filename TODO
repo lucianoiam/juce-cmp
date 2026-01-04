@@ -36,6 +36,7 @@ DEVELOPER EXPERIENCE
 [ ] Hot reload in embedded mode (currently only standalone Compose UI has it)
 [ ] Debug overlay showing frame times
 [ ] Example with more complex UI (lists, text fields, navigation)
+[ ] Mechanism for easily creating startup UI snapshots
 
 PRODUCTION READINESS
 --------------------
