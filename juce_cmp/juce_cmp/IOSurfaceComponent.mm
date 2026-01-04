@@ -338,6 +338,10 @@ void IOSurfaceComponent::launchChildProcess()
 #if JUCE_MAC
         attachNativeView();
 #endif
+        
+        // Notify that child is ready to receive events
+        if (readyCallback)
+            readyCallback();
     }
 }
 

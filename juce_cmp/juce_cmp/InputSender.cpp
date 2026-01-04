@@ -10,6 +10,7 @@
  */
 #include "InputSender.h"
 #include <juce_core/juce_core.h>
+#include <cstring>  // for std::memcpy
 
 #if JUCE_MAC || JUCE_LINUX
 #include <unistd.h>
@@ -143,6 +144,25 @@ void InputSender::sendResize(int width, int height, float scale, uint32_t newSur
 
 #if JUCE_MAC || JUCE_LINUX
     // For resize, timestamp carries the new surface ID, not actual time
+    ssize_t written = write(pipeFD, &event, sizeof(InputEvent));
+    if (written != sizeof(InputEvent))
+        pipeFD = -1;
+#endif
+}
+
+void InputSender::sendParameterChange(uint32_t paramId, float value)
+{
+    InputEvent event = {};
+    event.type = INPUT_EVENT_PARAM;
+    event.data1 = static_cast<int16_t>(paramId & 0xFFFF);
+    // Store float bits in timestamp field (reinterpret cast)
+    uint32_t valueBits;
+    std::memcpy(&valueBits, &value, sizeof(float));
+    event.timestamp = valueBits;
+    
+    if (pipeFD < 0) return;
+
+#if JUCE_MAC || JUCE_LINUX
     ssize_t written = write(pipeFD, &event, sizeof(InputEvent));
     if (written != sizeof(InputEvent))
         pipeFD = -1;

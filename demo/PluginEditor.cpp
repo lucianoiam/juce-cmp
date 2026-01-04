@@ -30,11 +30,26 @@ PluginEditor::PluginEditor(PluginProcessor& p)
         }
     });
     
+    // Wire up Host→UI parameter changes (automation from Live, etc.)
+    p.setParameterChangedCallback([this](int paramIndex, float value) {
+        // Forward to Compose UI via the input protocol
+        surfaceComponent.sendParameterChange(static_cast<uint32_t>(paramIndex), value);
+    });
+    
+    // Send initial parameter values when child process is ready
+    surfaceComponent.onReady([this, &p]() {
+        if (p.shapeParameter != nullptr)
+            surfaceComponent.sendParameterChange(0, p.shapeParameter->get());
+        // Add more parameters here as needed
+    });
+    
     addAndMakeVisible(surfaceComponent);
 }
 
 PluginEditor::~PluginEditor()
 {
+    // Clear the callback to avoid dangling reference
+    processorRef.setParameterChangedCallback(nullptr);
 }
 
 void PluginEditor::paint(juce::Graphics& g)

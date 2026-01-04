@@ -33,6 +33,7 @@ extern "C" {
 #define INPUT_EVENT_KEY     2
 #define INPUT_EVENT_FOCUS   3
 #define INPUT_EVENT_RESIZE  4
+#define INPUT_EVENT_PARAM   5  /* Host parameter change notification */
 
 /*
  * Mouse/key actions
@@ -74,6 +75,9 @@ extern "C" {
  * RESIZE: x = new width (pixels), y = new height (pixels),
  *         data1 = scale factor * 100 (e.g., 200 = 2.0x Retina),
  *         timestamp = new IOSurface ID
+ *
+ * PARAM: data1 = parameter ID (low 16 bits), 
+ *        timestamp = parameter value as float bits (reinterpreted as uint32)
  */
 #pragma pack(push, 1)
 typedef struct {

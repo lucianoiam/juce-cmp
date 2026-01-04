@@ -7,6 +7,7 @@ import androidx.compose.ui.InternalComposeUiApi
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.input.pointer.*
 import androidx.compose.ui.scene.ComposeScene
+import juce_cmp.ParameterState
 
 /**
  * Dispatches input events from the binary protocol to a ComposeScene.
@@ -35,6 +36,7 @@ class InputDispatcher(private val scene: ComposeScene, var scaleFactor: Float = 
             EventType.KEY -> dispatchKeyEvent(event)
             EventType.FOCUS -> dispatchFocusEvent(event)
             EventType.RESIZE -> dispatchResizeEvent(event)
+            EventType.PARAM -> dispatchParamEvent(event)
         }
     }
     
@@ -131,5 +133,10 @@ class InputDispatcher(private val scene: ComposeScene, var scaleFactor: Float = 
         // TODO: Handle resize - would need to recreate surfaces
         // This is complex and may require re-architecture
         println("[Input] Resize event: ${event.x}x${event.y} - not yet implemented")
+    }
+    
+    private fun dispatchParamEvent(event: InputEvent) {
+        // Update the global parameter state - Compose will recompose automatically
+        ParameterState.update(event.paramId, event.paramValue)
     }
 }

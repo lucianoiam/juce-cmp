@@ -15,6 +15,7 @@ object EventType {
     const val KEY = 2
     const val FOCUS = 3
     const val RESIZE = 4
+    const val PARAM = 5
 }
 
 // Mouse/key actions (matching INPUT_ACTION_* in input_protocol.h)
@@ -86,4 +87,10 @@ data class InputEvent(
     
     /** For resize events, get the new IOSurface ID */
     val newSurfaceID: Int get() = timestamp.toInt()
+    
+    /** For param events, get the parameter ID */
+    val paramId: Int get() = data1 and 0xFFFF
+    
+    /** For param events, get the parameter value (float bits stored in timestamp) */
+    val paramValue: Float get() = java.lang.Float.intBitsToFloat(timestamp.toInt())
 }

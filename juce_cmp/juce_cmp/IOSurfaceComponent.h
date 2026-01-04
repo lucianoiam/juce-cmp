@@ -31,6 +31,13 @@ public:
     using SetParamCallback = std::function<void(uint32_t paramId, float value)>;
     void onSetParameter(SetParamCallback callback) { setParamCallback = std::move(callback); }
 
+    /// Set callback for when the child process is ready to receive events
+    using ReadyCallback = std::function<void()>;
+    void onReady(ReadyCallback callback) { readyCallback = std::move(callback); }
+
+    /// Send a parameter change from host to UI (for automation sync)
+    void sendParameterChange(uint32_t paramId, float value) { inputSender.sendParameterChange(paramId, value); }
+
     void resized() override;
     void paint(juce::Graphics& g) override;
     void parentHierarchyChanged() override;
@@ -65,6 +72,7 @@ private:
     InputSender inputSender;
     UIReceiver uiReceiver;
     SetParamCallback setParamCallback;
+    ReadyCallback readyCallback;
 
     bool childLaunched = false;
     float backingScaleFactor = 1.0f;  // e.g., 2.0 for Retina displays

@@ -28,6 +28,7 @@ import org.jetbrains.compose.ui.tooling.preview.Preview
 
 import juce_cmp.demo.resources.Res
 import juce_cmp.demo.resources.compose_multiplatform
+import juce_cmp.ParameterState
 import juce_cmp.UISender
 // Knob is in the same package, no import needed
 
@@ -45,7 +46,9 @@ fun App() {
             horizontalAlignment = Alignment.CenterHorizontally,
         ) {
             // Shape knob - controls oscillator waveform (0=sine, 1=square)
-            var shapeValue by remember { mutableStateOf(0f) }
+            // Observe ParameterState so host automation updates the UI
+            val paramState = ParameterState.getState()
+            val shapeValue = paramState[0] ?: 0f
             
             Row(
                 verticalAlignment = Alignment.CenterVertically,
@@ -67,8 +70,8 @@ fun App() {
                     Knob(
                         value = shapeValue,
                         onValueChange = { 
-                            shapeValue = it
-                            UISender.setParameter(0, it)  // paramId 0 = shape
+                            ParameterState.update(0, it)  // Update local state
+                            UISender.setParameter(0, it)  // Send to host (paramId 0 = shape)
                         }
                     )
                     Text(

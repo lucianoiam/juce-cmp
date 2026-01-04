@@ -42,6 +42,9 @@ public:
     void sendFocus(bool focused);
     void sendResize(int width, int height, float scale, uint32_t newSurfaceID);
 
+    // Parameter events (host automation → UI)
+    void sendParameterChange(uint32_t paramId, float value);
+
 private:
     void sendEvent(InputEvent& event);
     uint32_t getTimestampMs() const;

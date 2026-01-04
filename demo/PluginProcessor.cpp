@@ -21,10 +21,14 @@ PluginProcessor::PluginProcessor()
         1.0f,   // max
         0.0f    // default: sine wave
     ));
+    
+    // Register to receive notifications when host changes parameter
+    shapeParameter->addListener(this);
 }
 
 PluginProcessor::~PluginProcessor()
 {
+    shapeParameter->removeListener(this);
 }
 
 const juce::String PluginProcessor::getName() const
@@ -156,6 +160,20 @@ void PluginProcessor::setStateInformation(const void* data, int sizeInBytes)
     auto xml = getXmlFromBinary(data, sizeInBytes);
     if (xml != nullptr && xml->hasTagName("State"))
         *shapeParameter = static_cast<float>(xml->getDoubleAttribute(PARAM_SHAPE_ID, 0.0));
+}
+
+void PluginProcessor::parameterValueChanged(int parameterIndex, float newValue)
+{
+    // Notify the editor (if any) about the parameter change
+    // This fires when the host changes the parameter (automation, preset, etc.)
+    if (paramCallback)
+        paramCallback(parameterIndex, newValue);
+}
+
+void PluginProcessor::parameterGestureChanged(int parameterIndex, bool gestureIsStarting)
+{
+    juce::ignoreUnused(parameterIndex, gestureIsStarting);
+    // Not needed for UI sync, but required by the interface
 }
 
 // Plugin instantiation

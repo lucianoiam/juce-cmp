@@ -16,6 +16,12 @@ RENDERING
 ARCHITECTURE
 ------------
 [x] Bidirectional IPC - UI sends messages back (setParameter working)
+[ ] Rethink IPC protocol for extensibility
+    - Current: fixed 16-byte structs with event-specific field reuse (brittle)
+    - Consider: length-prefixed messages with opcode + payload (like ui_protocol.h)
+    - Unify host→UI and UI→host into single protocol design
+    - Version negotiation for forward compatibility
+    - Consider protobuf/flatbuffers vs hand-rolled binary
 [ ] Shared memory ring buffer instead of pipe for lower latency
 [ ] Extract embedding as a library/framework others can use
 
