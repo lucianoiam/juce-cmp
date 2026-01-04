@@ -170,6 +170,11 @@ demo/                         # Example plugin using juce_cmp
         main.kt               # Entry point
         App.kt                # Demo Compose UI
         Knob.kt               # Example rotary knob widget
+  scripts/                    # Build and run scripts
+    build.sh                  # Build everything
+    run_standalone.sh         # Run standalone app
+    install_plugin.sh         # Install AU plugin
+    run_only_ui_with_hot_reload.sh  # Hot reload for UI development
   CMakeLists.txt              # Builds demo plugin
 ```
 
