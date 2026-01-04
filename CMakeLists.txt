@@ -65,7 +65,7 @@ set(UI_STAMP_FILE "${CMAKE_CURRENT_BINARY_DIR}/ui.stamp")
 
 add_custom_command(
     OUTPUT "${UI_STAMP_FILE}"
-    COMMAND ${GRADLE_CMD} :composeApp:packageDistributionForCurrentOS --quiet
+    COMMAND ${GRADLE_CMD} :composeApp:createDistributable --quiet
     COMMAND ${CMAKE_COMMAND} -E touch "${UI_STAMP_FILE}"
     WORKING_DIRECTORY "${DEMO_UI_DIR}"
     DEPENDS ${KOTLIN_SOURCES} "${NATIVE_RENDERER_OUT}"
