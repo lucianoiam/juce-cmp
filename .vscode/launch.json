@@ -17,6 +17,15 @@
           "ignoreFailures": true
         }
       ]
+    },
+    {
+      "name": "Debug Demo Standalone (CodeLLDB)",
+      "type": "lldb",
+      "request": "launch",
+      "program": "${workspaceFolder}/build/demo/juce-cmp-demo_artefacts/Debug/Standalone/juce-cmp-demo.app/Contents/MacOS/juce-cmp-demo",
+      "args": [],
+      "cwd": "${workspaceFolder}",
+      "preLaunchTask": "Build JUCE Plugin"
     }
   ]
 }
