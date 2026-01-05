@@ -108,13 +108,13 @@ private fun createRenderResources(
 }
 
 /**
- * True zero-copy GPU-accelerated IOSurface renderer.
- * 
+ * Zero-copy GPU-accelerated IOSurface renderer.
+ *
  * This implementation uses Skia's Metal backend to render Compose content
  * directly into an IOSurface-backed Metal texture. There are NO CPU pixel
  * copies - the GPU renders directly to the shared memory that the host
  * process displays.
- * 
+ *
  * Architecture:
  * 1. Native library creates Metal device and command queue
  * 2. Native library creates an MTLTexture backed by the IOSurface
@@ -124,7 +124,7 @@ private fun createRenderResources(
  * 6. GPU work goes directly to the IOSurface - host sees it immediately!
  */
 @OptIn(InternalComposeUiApi::class)
-fun runIOSurfaceRendererGPU(
+internal fun runIOSurfaceRendererImpl(
     surfaceID: Int,
     scaleFactor: Float = 1f,
     onFrameRendered: ((frameNumber: Long, surface: Surface) -> Unit)? = null,

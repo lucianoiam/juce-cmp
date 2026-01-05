@@ -17,7 +17,7 @@ import juce_cmp.renderer.captureFirstFrame
  * - Embedded: Renders to IOSurface for host integration (--embed flag)
  *
  * In embedded mode, the host passes --iosurface-id=<id> to specify
- * which IOSurface to render to. Optional --disable-gpu falls back to CPU.
+ * which IOSurface to render to.
  */
 fun main(args: Array<String>) {
     val embedMode = args.contains("--embed")
@@ -42,15 +42,11 @@ fun main(args: Array<String>) {
             ?.substringAfter("=")
             ?.toFloatOrNull()
             ?: 1f
-        
-        // --disable-gpu forces CPU rendering (for debugging)
-        val disableGpu = args.contains("--disable-gpu")
-        
+
         // Start rendering to the shared IOSurface
         runIOSurfaceRenderer(
             surfaceID = surfaceID,
             scaleFactor = scaleFactor,
-            disableGpu = disableGpu,
             onFrameRendered = captureFirstFrame("/tmp/loading_preview.png")
         ) {
             UserInterface()
