@@ -35,6 +35,7 @@ fun Words() {
     val duration = 5000
 
     val infiniteTransition = rememberInfiniteTransition()
+    // Start at initial angle (-50f) so first frame is predictable
     val angle by infiniteTransition.animateFloat(
         initialValue = -50f,
         targetValue = 30f,
@@ -43,6 +44,7 @@ fun Words() {
             repeatMode = RepeatMode.Reverse
         )
     )
+    // Start at initial scale (1f) so first frame is predictable
     val scale by infiniteTransition.animateFloat(
         initialValue = 1f,
         targetValue = 7f,
@@ -116,9 +118,8 @@ fun FallingSnow() {
                     repeatMode = RepeatMode.Restart
                 )
             )
-            val initialT = remember { Random.nextFloat() }
-            val actualT = (initialT + t) % 1f
-            val y = (-sizePx + (constraints.maxHeight + sizePx) * actualT).toInt()
+            // All balls start from top (initialT = 0) so first frame is clean
+            val y = (-sizePx + (constraints.maxHeight + sizePx) * t).toInt()
 
             Box(
                 Modifier
@@ -237,12 +238,24 @@ fun UserInterface() {
                 modifier = Modifier.fillMaxSize(),
                 contentAlignment = Alignment.Center
             ) {
+                // Fade in knob so first frame is predictable (one-time animation)
+                var targetAlpha by remember { mutableStateOf(0f) }
+                val knobAlpha by animateFloatAsState(
+                    targetValue = targetAlpha,
+                    animationSpec = tween(150, easing = LinearEasing)
+                )
+
+                LaunchedEffect(Unit) {
+                    targetAlpha = 1f
+                }
+
                 // Observe ParameterState so host automation updates the UI
                 val paramState = ParameterState.getState()
                 val shapeValue = paramState[0] ?: 0f
 
                 Column(
-                    horizontalAlignment = Alignment.CenterHorizontally
+                    horizontalAlignment = Alignment.CenterHorizontally,
+                    modifier = Modifier.alpha(knobAlpha)
                 ) {
                     Text(
                         text = "Shape",
