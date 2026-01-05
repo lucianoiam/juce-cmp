@@ -13,7 +13,7 @@ PluginEditor::PluginEditor(PluginProcessor& p)
     : AudioProcessorEditor(&p), processorRef(p)
 {
     setSize(768, 480);
-    setResizable(true, true);
+    setResizable(true, false);  // Resizable but hide native corner (Compose UI draws its own)
     setResizeLimits(400, 300, 2048, 2048);
     
     // Load the preview image from embedded data

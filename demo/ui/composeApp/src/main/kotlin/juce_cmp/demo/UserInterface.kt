@@ -4,6 +4,7 @@
 package juce_cmp.demo
 
 import androidx.compose.animation.core.*
+import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.shape.CircleShape
@@ -16,6 +17,7 @@ import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.rotate
 import androidx.compose.ui.draw.scale
+import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.text.font.FontWeight
@@ -139,6 +141,46 @@ fun Background() = Box(
 )
 
 @Composable
+fun ResizeHandle() {
+    Box(
+        modifier = Modifier
+            .fillMaxSize()
+            .padding(bottom = 2.dp, end = 2.dp),
+        contentAlignment = Alignment.BottomEnd
+    ) {
+        Canvas(modifier = Modifier.size(16.dp)) {
+            val handleColor = Color.DarkGray.copy(alpha = 0.7f)
+            val strokeWidth = 2f
+
+            // Draw three diagonal lines like JUCE resize handle
+            // Bottom line (longest)
+            drawLine(
+                color = handleColor,
+                start = Offset(size.width - 4.dp.toPx(), size.height),
+                end = Offset(size.width, size.height - 4.dp.toPx()),
+                strokeWidth = strokeWidth
+            )
+
+            // Middle line
+            drawLine(
+                color = handleColor,
+                start = Offset(size.width - 8.dp.toPx(), size.height),
+                end = Offset(size.width, size.height - 8.dp.toPx()),
+                strokeWidth = strokeWidth
+            )
+
+            // Top line (shortest)
+            drawLine(
+                color = handleColor,
+                start = Offset(size.width - 12.dp.toPx(), size.height),
+                end = Offset(size.width, size.height - 12.dp.toPx()),
+                strokeWidth = strokeWidth
+            )
+        }
+    }
+}
+
+@Composable
 @Preview
 fun UserInterface() {
     MaterialTheme {
@@ -225,6 +267,9 @@ fun UserInterface() {
                     )
                 }
             }
+
+            // Resize handle in bottom right corner
+            ResizeHandle()
         }
     }
 }
