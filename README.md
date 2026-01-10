@@ -55,7 +55,7 @@ The module uses IOSurface for zero-copy GPU rendering, enabling efficient integr
 
 **Input:** Mouse/keyboard events are captured by the JUCE component and sent to the child via a 16-byte binary protocol over stdin. The UI deserializes and injects them into the Compose scene.
 
-**Bidirectional IPC:** Host→UI uses CUSTOM events carrying ValueTree payloads via stdin. UI→Host uses length-prefixed ValueTree binary data via stdout. The library has no knowledge of parameters—apps interpret ValueTree content.
+**Bidirectional IPC:** Host→UI uses GENERIC events carrying ValueTree payloads via stdin. UI→Host uses length-prefixed ValueTree binary data via stdout. The library has no knowledge of parameters—apps interpret ValueTree content.
 
 ## Project Structure
 
@@ -119,19 +119,17 @@ juce_cmp_ui/                  # Kotlin Multiplatform library
     build.gradle.kts          # Library build config
     src/jvmMain/
       kotlin/juce_cmp/
+        Library.kt           # Library initialization (must call init() first)
         events/
-          EventSender.kt       # Sends messages to JUCE host
+          EventSender.kt       # Sends JuceValueTree to host (UI → host)
+          EventReceiver.kt     # Receives events from host (host → UI)
           JuceValueTree.kt     # JUCE-compatible ValueTree implementation
         input/
-          InputReceiver.kt     # Reads binary events from stdin
           InputDispatcher.kt   # Injects events into ComposeScene
           InputMapper.kt       # Maps protocol events to Compose
           InputEvent.kt        # Event data classes
         renderer/
-          IOSurfaceRenderer.kt      # Renderer abstraction
-          IOSurfaceRendererGPU.kt   # Zero-copy Metal rendering
-          IOSurfaceRendererCPU.kt   # Software fallback
-          IOSurfaceLib.kt           # JNA bindings for IOSurface
+          IOSurfaceRenderer.kt # Zero-copy Metal rendering
       cpp/
         iosurface_renderer.m   # Native Metal bridge for Skia
       resources/
@@ -221,12 +219,9 @@ To validate: `auval -v aumu JCMs JCMm`
 ## Command-Line Flags
 
 The UI app supports these flags when launched by the plugin:
-- `--embed` - Run as embedded renderer
+- `--embed` - Run as embedded renderer (required for plugin mode)
 - `--iosurface-id=<id>` - IOSurface ID to render to
 - `--scale=<factor>` - Backing scale factor (e.g., 2.0 for Retina)
-- `--input-pipe=<fd>` - File descriptor for input events
-- `--ipc-fifo=<path>` - Named pipe for UI→Host messages
-- `--disable-gpu` - Use CPU software rendering instead of Metal
 
 ## IPC Protocol
 
@@ -234,7 +229,7 @@ Events are 16-byte binary structs sent over stdin (see `juce_cmp/juce_cmp/ipc_pr
 
 | Offset | Size | Field      | Description                           |
 |--------|------|------------|---------------------------------------|
-| 0      | 1    | type       | 1=mouse, 2=key, 3=focus, 4=resize, 5=juce |
+| 0      | 1    | type       | 1=mouse, 2=key, 3=focus, 4=resize, 5=generic |
 | 1      | 1    | action     | 1=press, 2=release, 3=move, 4=scroll  |
 | 2      | 1    | button     | Mouse button (1=left, 2=right, 3=mid) |
 | 3      | 1    | modifiers  | Bitmask: 1=shift, 2=ctrl, 4=alt, 8=meta |
@@ -250,8 +245,8 @@ Events are 16-byte binary structs sent over stdin (see `juce_cmp/juce_cmp/ipc_pr
 - `size` (uint32_t, little-endian) - ValueTree data size in bytes
 - `data` (N bytes) - ValueTree binary serialization (JUCE-compatible)
 
-**Host→UI (stdin CUSTOM event):**
-- 16-byte header with `type=5` (CUSTOM), `timestamp=payload_length`
+**Host→UI (stdin GENERIC event):**
+- 16-byte header with `type=5` (GENERIC), `timestamp=payload_length`
 - Followed by `payload_length` bytes of ValueTree binary data
 
 **Example (app-level interpretation as parameter):**
