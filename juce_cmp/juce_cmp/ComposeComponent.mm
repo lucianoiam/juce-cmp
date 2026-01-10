@@ -278,13 +278,13 @@ void ComposeComponent::componentMovedOrResized(juce::Component&, bool, bool)
 
 void ComposeComponent::paint(juce::Graphics& g)
 {
-    // Only draw loading state before child process is ready
-    if (childLaunched)
-        return;
-
-    // Fill background if color is set
+    // Always fill background if color was specified (prevents flashing during transitions)
     if (!loadingBackgroundColor.isTransparent())
         g.fillAll(loadingBackgroundColor);
+
+    // Only draw loading preview before child process is ready
+    if (childLaunched)
+        return;
 
     // Draw preview image with aspect-ratio scaling
     if (loadingPreview.isValid())
