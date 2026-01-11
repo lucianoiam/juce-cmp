@@ -404,6 +404,7 @@ void ComposeComponent::resized()
 #if JUCE_MAC
     if (childLaunched && nativeView)
     {
+        updateNativeViewBounds();  // Update NSView frame immediately
         SurfaceView* view = (__bridge SurfaceView*)nativeView;
         auto bounds = getLocalBounds();
         [view requestResize:NSMakeSize(bounds.getWidth(), bounds.getHeight())];
