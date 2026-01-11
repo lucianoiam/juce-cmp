@@ -96,8 +96,10 @@ public:
         IOSurfaceRef newSurface = IOSurfaceCreate((__bridge CFDictionaryRef)props);
         if (newSurface != nullptr)
         {
-            if (surface != nullptr)
-                CFRelease(surface);
+            // Keep previous surface alive - view may still be displaying it
+            if (previousSurface != nullptr)
+                CFRelease(previousSurface);
+            previousSurface = surface;
             surface = newSurface;
             return IOSurfaceGetID(surface);
         }
@@ -296,6 +298,11 @@ private:
     void releaseSurface()
     {
 #if JUCE_MAC
+        if (previousSurface != nullptr)
+        {
+            CFRelease(previousSurface);
+            previousSurface = nullptr;
+        }
         if (surface != nullptr)
         {
             CFRelease(surface);
@@ -306,6 +313,7 @@ private:
 
 #if JUCE_MAC
     IOSurfaceRef surface = nullptr;
+    IOSurfaceRef previousSurface = nullptr;  // Keep alive during resize transition
     pid_t childPid = 0;
 #endif
     int stdinPipeFD = -1;

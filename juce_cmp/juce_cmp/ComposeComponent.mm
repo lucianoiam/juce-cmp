@@ -52,6 +52,9 @@ static CVReturn displayLinkCallback(CVDisplayLinkRef displayLink,
 /// Currently displayed surface
 @property (nonatomic, assign) IOSurfaceRef surface;
 
+/// Pending surface to swap on next frame (allows child time to render)
+@property (nonatomic, assign) IOSurfaceRef pendingSurface;
+
 /// Backing scale factor (e.g., 2.0 for Retina)
 @property (nonatomic, assign) CGFloat backingScale;
 
@@ -146,6 +149,11 @@ static CVReturn displayLinkCallback(CVDisplayLinkRef displayLink,
     (void)displayLink; (void)now; (void)outputTime; (void)flagsIn; (void)flagsOut;
     SurfaceView *view = (__bridge SurfaceView *)context;
     dispatch_async(dispatch_get_main_queue(), ^{
+        // Swap pending surface if set (gives child one frame to render)
+        if (view.pendingSurface) {
+            view.surface = view.pendingSurface;
+            view.pendingSurface = nil;
+        }
         [view.layer setNeedsDisplay];
     });
     return kCVReturnSuccess;
@@ -315,11 +323,6 @@ void ComposeComponent::launchChildProcess()
     }
 }
 
-void ComposeComponent::handleResize()
-{
-    // Handled by SurfaceView now
-}
-
 void ComposeComponent::resized()
 {
     tryLaunchChild();
@@ -361,10 +364,11 @@ void ComposeComponent::attachNativeView()
             uint32_t newSurfaceID = provider->resizeSurface(pixelW, pixelH);
             if (newSurfaceID != 0) {
                 sender->sendResize(pixelW, pixelH, scale, newSurfaceID);
-                // Update displayed surface immediately
+                // Set pending surface - will swap on next CVDisplayLink tick
+                // This gives child one frame to render to new surface
                 if (*nativeViewPtr) {
                     SurfaceView* v = (__bridge SurfaceView*)*nativeViewPtr;
-                    v.surface = (IOSurfaceRef)provider->getNativeSurface();
+                    v.pendingSurface = (IOSurfaceRef)provider->getNativeSurface();
                 }
             }
         };
@@ -419,18 +423,6 @@ void ComposeComponent::updateNativeViewBounds()
         [view setFrame:frame];
 }
 
-void ComposeComponent::updateNativeViewSurface()
-{
-    if (nativeView && surfaceProvider.getNativeSurface())
-    {
-        SurfaceView* view = (__bridge SurfaceView*)nativeView;
-        IOSurfaceRef newSurface = (IOSurfaceRef)surfaceProvider.getNativeSurface();
-        if (view.surface != newSurface) {
-            view.surface = newSurface;
-            [view.layer setNeedsDisplay];
-        }
-    }
-}
 #endif
 
 int ComposeComponent::getModifiers() const

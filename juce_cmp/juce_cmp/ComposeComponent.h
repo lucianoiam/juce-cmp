@@ -77,7 +77,6 @@ private:
 
     void tryLaunchChild();
     void launchChildProcess();
-    void handleResize();
     int getModifiers() const;
     int mapMouseButton(const juce::MouseEvent& event) const;
 
@@ -101,7 +100,6 @@ private:
     void attachNativeView();
     void detachNativeView();
     void updateNativeViewBounds();
-    void updateNativeViewSurface();
 #endif
 
     JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR(ComposeComponent)
