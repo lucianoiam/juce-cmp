@@ -18,11 +18,13 @@ public:
     ~PluginEditor() override;
 
     void paint(juce::Graphics&) override;
+    void paintOverChildren(juce::Graphics&) override;
     void resized() override;
 
 private:
     PluginProcessor& processorRef;
     juce_cmp::ComposeComponent composeComponent;
+    bool uiReady = false;
 
     JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR(PluginEditor)
 };

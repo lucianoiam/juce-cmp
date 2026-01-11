@@ -21,7 +21,6 @@ namespace juce_cmp
  * to the child process.
  */
 class ComposeComponent : public juce::Component,
-                           private juce::Timer,
                            private juce::ComponentListener
 {
 public:
@@ -35,6 +34,10 @@ public:
     /// Set callback for when the child process is ready to receive events
     using ReadyCallback = std::function<void()>;
     void onProcessReady(ReadyCallback callback) { readyCallback = std::move(callback); }
+
+    /// Set callback for when the UI has rendered its first frame
+    using FirstFrameCallback = std::function<void()>;
+    void onFirstFrame(FirstFrameCallback callback) { firstFrameCallback = std::move(callback); }
 
     /// Send a GENERIC event from host to UI (ValueTree payload)
     void sendEvent(const juce::ValueTree& tree) { inputSender.sendEvent(tree); }
@@ -75,9 +78,9 @@ public:
     void focusLost(FocusChangeType cause) override;
 
 private:
-    void timerCallback() override;
     void componentMovedOrResized(juce::Component& component, bool wasMoved, bool wasResized) override;
-    
+
+    void tryLaunchChild();
     void launchChildProcess();
     void handleResize();
     int getModifiers() const;
@@ -88,6 +91,7 @@ private:
     EventReceiver eventReceiver;
     EventCallback eventCallback;
     ReadyCallback readyCallback;
+    FirstFrameCallback firstFrameCallback;
 
     bool childLaunched = false;
     bool firstFrameReceived = false;  // True when UI has rendered first frame

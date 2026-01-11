@@ -60,7 +60,14 @@ PluginEditor::PluginEditor(PluginProcessor& p)
         // Add more parameters here as needed
     });
 
+    // Hide loading text when first frame is rendered
+    composeComponent.onFirstFrame([this] {
+        uiReady = true;
+        this->repaint();
+    });
+
     addAndMakeVisible(composeComponent);
+    repaint();  // Trigger initial paint to show "Starting UI..." text
 }
 
 PluginEditor::~PluginEditor()
@@ -73,6 +80,16 @@ void PluginEditor::paint(juce::Graphics& g)
 {
     juce::ignoreUnused(g);
     // Loading preview is now handled by ComposeComponent
+}
+
+void PluginEditor::paintOverChildren(juce::Graphics& g)
+{
+    if (uiReady)
+        return;
+
+    g.setColour(juce::Colour(0xFF444444));  // Match Compose Color.DarkGray
+    g.setFont(juce::FontOptions(15.0f));
+    g.drawFittedText("Starting UI...", getLocalBounds(), juce::Justification::centred, 1);
 }
 
 void PluginEditor::resized()

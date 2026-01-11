@@ -239,23 +239,21 @@ ComposeComponent::ComposeComponent()
     setOpaque(false);  // Allow parent to show through until child renders
     setWantsKeyboardFocus(true);
     setInterceptsMouseClicks(true, true);
-    startTimerHz(10); // Low-frequency timer for initial launch and resize checks only
 }
 
 ComposeComponent::~ComposeComponent()
 {
     if (auto* topLevel = getTopLevelComponent())
         topLevel->removeComponentListener(this);
-    stopTimer();
-    
+
     // Stop child process first - this closes stdin (signaling EOF to child),
     // then waits for child to exit. Once child exits, it closes its end of the
     // FIFO, which unblocks the EventReceiver thread.
     surfaceProvider.stopChild();
-    
+
     // Now stop EventReceiver - should exit immediately since child closed FIFO
     eventReceiver.stop();
-    
+
 #if JUCE_MAC
     detachNativeView();
 #endif
@@ -263,6 +261,7 @@ ComposeComponent::~ComposeComponent()
 
 void ComposeComponent::parentHierarchyChanged()
 {
+    tryLaunchChild();
 #if JUCE_MAC
     if (childLaunched && getPeer() != nullptr)
         attachNativeView();
@@ -317,7 +316,7 @@ void ComposeComponent::paint(juce::Graphics& g)
     }
 }
 
-void ComposeComponent::timerCallback()
+void ComposeComponent::tryLaunchChild()
 {
     if (!childLaunched && getPeer() != nullptr && !getLocalBounds().isEmpty())
         launchChildProcess();
@@ -371,6 +370,8 @@ void ComposeComponent::launchChildProcess()
         eventReceiver.setFirstFrameHandler([this]() {
             firstFrameReceived = true;
             repaint();  // Remove loading preview
+            if (firstFrameCallback)
+                firstFrameCallback();
         });
         eventReceiver.start(surfaceProvider.getStdoutPipeFD());
         
@@ -392,6 +393,7 @@ void ComposeComponent::handleResize()
 
 void ComposeComponent::resized()
 {
+    tryLaunchChild();
 #if JUCE_MAC
     if (childLaunched && nativeView)
     {
