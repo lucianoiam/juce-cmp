@@ -6,7 +6,7 @@
  *
  * Architecture:
  * - SurfaceView (NSView): Native view inserted as subview, displays IOSurface
- *   via CALayer.contents. Uses CVDisplayLink for vsync-synchronized refresh.
+ *   via CALayer.contents. Uses CADisplayLink for vsync-synchronized refresh.
  * - ComposeComponent (juce::Component): Transparent component layered on top
  *   of SurfaceView. Captures all input events and forwards to child process.
  *
@@ -20,7 +20,6 @@
 #if JUCE_MAC
 #include <IOSurface/IOSurface.h>
 #import <QuartzCore/QuartzCore.h>
-#import <CoreVideo/CoreVideo.h>
 #import <AppKit/AppKit.h>
 
 // Private CALayer method to notify that IOSurface contents changed
@@ -36,17 +35,9 @@
  * This view is purely for display - it never accepts input events.
  * The JUCE component layered above it handles all interaction.
  *
- * Uses CVDisplayLink to trigger layer refresh on each vsync, ensuring
+ * Uses CADisplayLink to trigger layer refresh on each vsync, ensuring
  * smooth animation even when the IOSurface content changes every frame.
  */
-@class SurfaceView;
-static CVReturn displayLinkCallback(CVDisplayLinkRef displayLink,
-                                    const CVTimeStamp *now,
-                                    const CVTimeStamp *outputTime,
-                                    CVOptionFlags flagsIn,
-                                    CVOptionFlags *flagsOut,
-                                    void *context);
-
 @interface SurfaceView : NSView
 
 /// Currently displayed surface
@@ -58,11 +49,13 @@ static CVReturn displayLinkCallback(CVDisplayLinkRef displayLink,
 /// Backing scale factor (e.g., 2.0 for Retina)
 @property (nonatomic, assign) CGFloat backingScale;
 
-/// Vsync-synchronized display refresh
-@property (nonatomic, assign) CVDisplayLinkRef displayLink;
+/// Vsync-synchronized display refresh (runs on main thread)
+@property (nonatomic, retain) CADisplayLink *displayLink;
 
 /// Callback to request resize from host
 @property (nonatomic, copy) void (^resizeCallback)(NSSize size);
+
+- (void)displayLinkFired:(CADisplayLink*)link;
 
 @end
 
@@ -75,25 +68,20 @@ static CVReturn displayLinkCallback(CVDisplayLinkRef displayLink,
         self.backingScale = 1.0;  // Will be updated when added to window
         self.layer.contentsGravity = kCAGravityTopLeft;
 
-        // Create and start CVDisplayLink for vsync-synchronized updates
-        #pragma clang diagnostic push
-        #pragma clang diagnostic ignored "-Wdeprecated-declarations"
-        CVDisplayLinkCreateWithActiveCGDisplays(&_displayLink);
-        CVDisplayLinkSetOutputCallback(_displayLink, displayLinkCallback, (__bridge void *)self);
-        CVDisplayLinkStart(_displayLink);
-        #pragma clang diagnostic pop
+        // Create CADisplayLink for vsync-synchronized updates (runs on main thread)
+        _displayLink = [self.window.screen displayLinkWithTarget:self selector:@selector(displayLinkFired:)];
+        if (!_displayLink) {
+            // Fallback if no screen yet - use main screen
+            _displayLink = [NSScreen.mainScreen displayLinkWithTarget:self selector:@selector(displayLinkFired:)];
+        }
+        [_displayLink addToRunLoop:NSRunLoop.mainRunLoop forMode:NSRunLoopCommonModes];
     }
     return self;
 }
 
 - (void)dealloc {
-    if (_displayLink) {
-        #pragma clang diagnostic push
-        #pragma clang diagnostic ignored "-Wdeprecated-declarations"
-        CVDisplayLinkStop(_displayLink);
-        CVDisplayLinkRelease(_displayLink);
-        #pragma clang diagnostic pop
-    }
+    [_displayLink invalidate];
+    [_displayLink release];
     [super dealloc];
 }
 
@@ -137,27 +125,18 @@ static CVReturn displayLinkCallback(CVDisplayLinkRef displayLink,
     return NO;
 }
 
-@end
-
-/// CVDisplayLink callback - triggers layer redraw on each vsync.
-static CVReturn displayLinkCallback(CVDisplayLinkRef displayLink,
-                                    const CVTimeStamp *now,
-                                    const CVTimeStamp *outputTime,
-                                    CVOptionFlags flagsIn,
-                                    CVOptionFlags *flagsOut,
-                                    void *context) {
-    (void)displayLink; (void)now; (void)outputTime; (void)flagsIn; (void)flagsOut;
-    SurfaceView *view = (__bridge SurfaceView *)context;
-    dispatch_async(dispatch_get_main_queue(), ^{
-        // Swap pending surface if set (gives child one frame to render)
-        if (view.pendingSurface) {
-            view.surface = view.pendingSurface;
-            view.pendingSurface = nil;
-        }
-        [view.layer setNeedsDisplay];
-    });
-    return kCVReturnSuccess;
+/// CADisplayLink callback - triggers layer redraw on each vsync.
+- (void)displayLinkFired:(CADisplayLink*)link {
+    (void)link;
+    // Swap pending surface if set (gives child one frame to render)
+    if (self.pendingSurface) {
+        self.surface = self.pendingSurface;
+        self.pendingSurface = nil;
+    }
+    [self.layer setNeedsDisplay];
 }
+
+@end
 
 #endif
 
