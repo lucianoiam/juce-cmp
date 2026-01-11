@@ -15,10 +15,11 @@ import com.sun.jna.Pointer
 import com.sun.jna.ptr.IntByReference
 import kotlinx.coroutines.*
 import juce_cmp.events.EventReceiver
+import juce_cmp.events.EventSender
 import juce_cmp.events.JuceValueTree
 import juce_cmp.input.InputDispatcher
 import juce_cmp.input.InputEvent
-import juce_cmp.input.EventType
+import juce_cmp.input.InputType
 import org.jetbrains.skia.*
 import java.util.concurrent.ConcurrentLinkedQueue
 import java.util.concurrent.atomic.AtomicReference
@@ -178,7 +179,7 @@ private fun runIOSurfaceRendererImpl(
         // Start event receiver (receives input events from host via stdin)
         val eventReceiver = EventReceiver(
             onInputEvent = { event ->
-                if (event.type == EventType.RESIZE) {
+                if (event.type == InputType.RESIZE) {
                     // Resize events handled specially - store for main loop
                     // println("[GPU] Received resize event: ${event.width}x${event.height}, surfaceID=${event.newSurfaceID}")
                     // System.out.flush()
@@ -287,8 +288,7 @@ private fun runIOSurfaceRendererImpl(
                         onFrameRendered?.invoke(frameCount.toLong(), resources.skiaSurface)
 
                         if (frameCount == 0) {
-                            // println("[GPU] First frame rendered - zero-copy active!")
-                            // System.out.flush()
+                            EventSender.sendFirstFrameRendered()
                         }
                         frameCount++
                         needsRedraw.set(false)

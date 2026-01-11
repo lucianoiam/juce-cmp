@@ -7,14 +7,12 @@ import java.io.InputStream
 import java.nio.ByteBuffer
 import java.nio.ByteOrder
 import juce_cmp.input.InputEvent
-import juce_cmp.input.EventType
 
 /**
  * Receives binary events from the host process via stdin pipe.
  *
- * IPC Protocol: 16-byte fixed-size events (see juce_cmp/ipc_protocol.h).
- * GENERIC events (type 5) are followed by variable-length JuceValueTree payload.
- * This runs on a background thread and delivers events via callback.
+ * Protocol: 1-byte event type followed by type-specific payload.
+ * See ipc_protocol.h for details.
  *
  * Note: This is the Kotlin-side EventReceiver (host → UI direction).
  * The C++ EventReceiver in juce_cmp handles the opposite direction (UI → host).
@@ -28,6 +26,12 @@ class EventReceiver(
     private var running = false
     private var thread: Thread? = null
 
+    private companion object {
+        const val EVENT_TYPE_INPUT = 0
+        const val EVENT_TYPE_CMP = 1
+        const val EVENT_TYPE_JUCE = 2
+    }
+
     /** Returns true if the receiver is still running (stdin not closed) */
     val isRunning: Boolean get() = running
 
@@ -35,72 +39,102 @@ class EventReceiver(
         if (running) return
         running = true
         thread = Thread({
-            val buffer = ByteArray(16)
-            val byteBuffer = ByteBuffer.wrap(buffer).order(ByteOrder.LITTLE_ENDIAN)
-
             while (running) {
                 try {
-                    // Read exactly 16 bytes (one event header)
-                    var bytesRead = 0
-                    while (bytesRead < 16 && running) {
-                        val n = input.read(buffer, bytesRead, 16 - bytesRead)
-                        if (n < 0) {
-                            // EOF - parent closed pipe, exit immediately
-                            running = false
-                            // Force JVM exit - other threads may keep it alive
-                            kotlin.system.exitProcess(0)
-                        }
-                        bytesRead += n
+                    val eventType = input.read()
+                    System.err.println("[EventReceiver] Got event type: $eventType")
+                    if (eventType < 0) {
+                        running = false
+                        kotlin.system.exitProcess(0)
                     }
 
-                    if (bytesRead == 16) {
-                        byteBuffer.rewind()
-                        val event = InputEvent(
-                            type = byteBuffer.get().toInt() and 0xFF,
-                            action = byteBuffer.get().toInt() and 0xFF,
-                            button = byteBuffer.get().toInt() and 0xFF,
-                            modifiers = byteBuffer.get().toInt() and 0xFF,
-                            x = byteBuffer.short.toInt(),
-                            y = byteBuffer.short.toInt(),
-                            data1 = byteBuffer.short.toInt(),
-                            data2 = byteBuffer.short.toInt(),
-                            timestamp = byteBuffer.int.toLong() and 0xFFFFFFFFL
-                        )
-
-                        if (event.type == EventType.GENERIC && onJuceEvent != null) {
-                            // Read variable-length payload
-                            val payloadLength = event.payloadLength
-                            if (payloadLength > 0) {
-                                val payload = ByteArray(payloadLength)
-                                var payloadRead = 0
-                                while (payloadRead < payloadLength && running) {
-                                    val n = input.read(payload, payloadRead, payloadLength - payloadRead)
-                                    if (n < 0) {
-                                        running = false
-                                        kotlin.system.exitProcess(0)
-                                    }
-                                    payloadRead += n
-                                }
-
-                                if (payloadRead == payloadLength) {
-                                    // Parse JuceValueTree from payload
-                                    val tree = JuceValueTree.fromByteArray(payload)
-                                    onJuceEvent.invoke(tree)
-                                }
-                            }
-                        } else {
-                            onInputEvent(event)
-                        }
+                    when (eventType) {
+                        EVENT_TYPE_INPUT -> handleInputEvent()
+                        EVENT_TYPE_CMP -> handleCmpEvent()
+                        EVENT_TYPE_JUCE -> handleJuceEvent()
+                        else -> System.err.println("[EventReceiver] Unknown event type: $eventType")
                     }
                 } catch (e: Exception) {
                     if (running) {
-                        System.err.println("[Input] Error reading event: ${e.message}")
+                        System.err.println("[EventReceiver] Error: ${e.message}")
                     }
                 }
             }
         }, "EventReceiver")
         thread?.isDaemon = true
         thread?.start()
+    }
+
+    private fun handleInputEvent() {
+        val buffer = ByteArray(16)
+        var bytesRead = 0
+        while (bytesRead < 16 && running) {
+            val n = input.read(buffer, bytesRead, 16 - bytesRead)
+            if (n < 0) {
+                running = false
+                kotlin.system.exitProcess(0)
+            }
+            bytesRead += n
+        }
+
+        if (bytesRead == 16) {
+            val byteBuffer = ByteBuffer.wrap(buffer).order(ByteOrder.LITTLE_ENDIAN)
+            val event = InputEvent(
+                type = byteBuffer.get().toInt() and 0xFF,
+                action = byteBuffer.get().toInt() and 0xFF,
+                button = byteBuffer.get().toInt() and 0xFF,
+                modifiers = byteBuffer.get().toInt() and 0xFF,
+                x = byteBuffer.short.toInt(),
+                y = byteBuffer.short.toInt(),
+                data1 = byteBuffer.short.toInt(),
+                data2 = byteBuffer.short.toInt(),
+                timestamp = byteBuffer.int.toLong() and 0xFFFFFFFFL
+            )
+            onInputEvent(event)
+        }
+    }
+
+    private fun handleCmpEvent() {
+        val subtype = input.read()
+        if (subtype < 0) {
+            running = false
+            kotlin.system.exitProcess(0)
+        }
+        // CMP events are UI → Host only, shouldn't receive them here
+    }
+
+    private fun handleJuceEvent() {
+        val sizeBuffer = ByteArray(4)
+        var bytesRead = 0
+        while (bytesRead < 4 && running) {
+            val n = input.read(sizeBuffer, bytesRead, 4 - bytesRead)
+            if (n < 0) {
+                running = false
+                kotlin.system.exitProcess(0)
+            }
+            bytesRead += n
+        }
+
+        if (bytesRead == 4) {
+            val size = ByteBuffer.wrap(sizeBuffer).order(ByteOrder.LITTLE_ENDIAN).int
+            if (size > 0 && onJuceEvent != null) {
+                val payload = ByteArray(size)
+                var payloadRead = 0
+                while (payloadRead < size && running) {
+                    val n = input.read(payload, payloadRead, size - payloadRead)
+                    if (n < 0) {
+                        running = false
+                        kotlin.system.exitProcess(0)
+                    }
+                    payloadRead += n
+                }
+
+                if (payloadRead == size) {
+                    val tree = JuceValueTree.fromByteArray(payload)
+                    onJuceEvent.invoke(tree)
+                }
+            }
+        }
     }
 
     fun stop() {

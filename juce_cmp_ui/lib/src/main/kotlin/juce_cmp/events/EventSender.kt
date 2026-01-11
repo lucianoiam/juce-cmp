@@ -8,10 +8,10 @@ import java.nio.ByteBuffer
 import java.nio.ByteOrder
 
 /**
- * Sends JuceValueTree messages from UI to host over stdout (UI → host direction).
+ * Sends events from UI to host over stdout (UI → host direction).
  *
- * Protocol: 4-byte size (little-endian) followed by ValueTree binary data.
- * The C++ EventReceiver reads these messages on the host side.
+ * Protocol: 1-byte event type followed by type-specific payload.
+ * See ipc_protocol.h for details.
  *
  * Thread-safe: uses synchronized writes.
  *
@@ -22,6 +22,10 @@ object EventSender {
     private var output: OutputStream? = null
     private val lock = Any()
 
+    private const val EVENT_TYPE_CMP = 1
+    private const val EVENT_TYPE_JUCE = 2
+    private const val CMP_SUBTYPE_FIRST_FRAME = 0
+
     /** Called by Library.init() to set the output stream. */
     internal fun setOutput(stream: OutputStream) {
         output = stream
@@ -29,19 +33,33 @@ object EventSender {
 
     /**
      * Send a JuceValueTree to the host.
-     *
-     * Protocol: 4-byte size (little-endian) followed by tree bytes.
+     * Format: EVENT_TYPE_JUCE + 4-byte size + ValueTree bytes
      */
     fun send(tree: JuceValueTree) {
         val stream = output ?: return
 
         val treeBytes = tree.toByteArray()
-        val header = ByteBuffer.allocate(4).order(ByteOrder.LITTLE_ENDIAN)
-        header.putInt(treeBytes.size)
+        val sizeBuffer = ByteBuffer.allocate(4).order(ByteOrder.LITTLE_ENDIAN)
+        sizeBuffer.putInt(treeBytes.size)
 
         synchronized(lock) {
-            stream.write(header.array())
+            stream.write(EVENT_TYPE_JUCE)
+            stream.write(sizeBuffer.array())
             stream.write(treeBytes)
+            stream.flush()
+        }
+    }
+
+    /**
+     * Notify host that first frame has been rendered and surface is ready.
+     * Format: EVENT_TYPE_CMP + CMP_SUBTYPE_FIRST_FRAME
+     */
+    fun sendFirstFrameRendered() {
+        val stream = output ?: return
+
+        synchronized(lock) {
+            stream.write(EVENT_TYPE_CMP)
+            stream.write(CMP_SUBTYPE_FIRST_FRAME)
             stream.flush()
         }
     }

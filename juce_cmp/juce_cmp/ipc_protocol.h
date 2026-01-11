@@ -2,20 +2,13 @@
 // SPDX-License-Identifier: MIT
 
 /**
- * IPC Protocol - Binary IPC for cross-process event forwarding.
+ * IPC Protocol - Binary event forwarding between host and UI processes.
  *
- * This header defines the binary protocol for sending events from
- * the host application (Cocoa/Win32/JUCE) to the embedded Compose UI.
+ * Format: 1-byte event type followed by type-specific payload.
  *
- * Events are fixed-size 16-byte structs sent over stdin pipe.
- * Binary format is efficient and avoids parsing overhead.
- *
- * Platform implementations:
- *   - standalone/input_cocoa.m  (macOS)
- *   - standalone/input_win32.c  (Windows - future)
- *   - JUCE: direct C++ usage of this header
- *
- * Kotlin side: juce_cmp.events.EventReceiver reads and dispatches events.
+ * Directions:
+ *   Host → UI: stdin pipe
+ *   UI → Host: stdout pipe
  */
 #ifndef IPC_PROTOCOL_H
 #define IPC_PROTOCOL_H
@@ -27,21 +20,32 @@ extern "C" {
 #endif
 
 /*
- * Event types
+ * Event types (first byte of every message)
  */
-#define INPUT_EVENT_MOUSE   1
-#define INPUT_EVENT_KEY     2
-#define INPUT_EVENT_FOCUS   3
-#define INPUT_EVENT_RESIZE  4
-#define JUCE_EVENT_GENERIC          5  /* JUCE event with ValueTree payload following */
+#define EVENT_TYPE_INPUT            0
+#define EVENT_TYPE_CMP              1
+#define EVENT_TYPE_JUCE             2
+
+/*
+ * CMP event subtypes (second byte for EVENT_TYPE_CMP)
+ */
+#define CMP_SUBTYPE_FIRST_FRAME     0
+
+/*
+ * Input event types (InputEvent.type field, NOT the 1-byte prefix)
+ */
+#define INPUT_EVENT_MOUSE           0
+#define INPUT_EVENT_KEY             1
+#define INPUT_EVENT_FOCUS           2
+#define INPUT_EVENT_RESIZE          3
 
 /*
  * Mouse/key actions
  */
-#define INPUT_ACTION_PRESS   1
-#define INPUT_ACTION_RELEASE 2
-#define INPUT_ACTION_MOVE    3
-#define INPUT_ACTION_SCROLL  4
+#define INPUT_ACTION_PRESS          0
+#define INPUT_ACTION_RELEASE        1
+#define INPUT_ACTION_MOVE           2
+#define INPUT_ACTION_SCROLL         3
 
 /*
  * Mouse buttons
@@ -60,24 +64,24 @@ extern "C" {
 #define INPUT_MOD_META  8
 
 /**
- * Input event structure - 16 bytes, fixed size.
+ * Input event payload - 16 bytes, follows EVENT_TYPE_INPUT prefix byte.
  *
- * Interpretation depends on event type:
+ * Field interpretation varies by InputEvent.type:
  *
- * MOUSE: x/y = position, button = which button, action = press/release/move/scroll
- *        For scroll: data1 = scrollX * 100, data2 = scrollY * 100 (fixed point)
+ *   MOUSE:  action = press/release/move/scroll
+ *           x, y = cursor position (points)
+ *           button = which button
+ *           For scroll: data1/data2 = deltaX/deltaY * 100
  *
- * KEY:   x = virtual key code, button = unused, action = press/release
- *        data1/data2 = UTF-32 codepoint (low/high 16 bits)
+ *   KEY:    action = press/release
+ *           x = virtual key code
+ *           data1/data2 = UTF-32 codepoint (low/high 16 bits)
  *
- * FOCUS: data1 = 1 if focused, 0 if unfocused
+ *   FOCUS:  data1 = 1 if focused, 0 if lost
  *
- * RESIZE: x = new width (pixels), y = new height (pixels),
- *         data1 = scale factor * 100 (e.g., 200 = 2.0x Retina),
- *         timestamp = new IOSurface ID
- *
- * GENERIC: timestamp = payload length (bytes), followed by JuceValueTree binary data
- *          The 16-byte header is immediately followed by `length` bytes of payload.
+ *   RESIZE: x, y = new size (pixels)
+ *           data1 = scale factor * 100 (e.g., 200 = 2.0x)
+ *           timestamp = new IOSurface ID
  */
 #pragma pack(push, 1)
 typedef struct {
@@ -99,6 +103,16 @@ static_assert(sizeof(InputEvent) == 16, "InputEvent must be 16 bytes");
 #else
 _Static_assert(sizeof(InputEvent) == 16, "InputEvent must be 16 bytes");
 #endif
+
+/**
+ * CMP event payload - 1 byte subtype, follows EVENT_TYPE_CMP prefix.
+ *   CMP_SUBTYPE_FIRST_FRAME: Surface ready to display (no additional data)
+ */
+
+/**
+ * JUCE event payload - follows EVENT_TYPE_JUCE prefix.
+ *   4-byte size (little-endian) + ValueTree binary data
+ */
 
 #ifdef __cplusplus
 }

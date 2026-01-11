@@ -2,15 +2,13 @@
 // SPDX-License-Identifier: MIT
 
 /**
- * InputSender - Writes binary input events to child process stdin.
+ * InputSender - Writes binary events to child process stdin.
  *
- * Events follow the 16-byte IPC Protocol defined in ipc_protocol.h.
- * The pipe is non-blocking on the write side; if the child isn't reading
- * fast enough, writes may block momentarily.
+ * Protocol: 1-byte event type followed by type-specific payload.
+ * See ipc_protocol.h for details.
  */
 #include "InputSender.h"
 #include <juce_core/juce_core.h>
-#include <cstring>  // for std::memcpy
 
 #if JUCE_MAC || JUCE_LINUX
 #include <unistd.h>
@@ -56,7 +54,7 @@ uint32_t InputSender::getTimestampMs() const
     return static_cast<uint32_t>(juce::Time::getMillisecondCounterHiRes() - startTime);
 }
 
-void InputSender::sendEvent(InputEvent& event)
+void InputSender::sendInputEvent(InputEvent& event)
 {
     if (pipeFD < 0)
         return;
@@ -64,12 +62,17 @@ void InputSender::sendEvent(InputEvent& event)
     event.timestamp = getTimestampMs();
 
 #if JUCE_MAC || JUCE_LINUX
-    ssize_t written = write(pipeFD, &event, sizeof(InputEvent));
-    if (written != sizeof(InputEvent))
+    uint8_t prefix = EVENT_TYPE_INPUT;
+    ssize_t written = write(pipeFD, &prefix, 1);
+    if (written != 1)
     {
-        // Pipe broken - child may have exited
         pipeFD = -1;
+        return;
     }
+
+    written = write(pipeFD, &event, sizeof(InputEvent));
+    if (written != sizeof(InputEvent))
+        pipeFD = -1;
 #endif
 }
 
@@ -82,7 +85,7 @@ void InputSender::sendMouseMove(float x, float y, int modifiers)
     event.modifiers = static_cast<uint8_t>(modifiers);
     event.x = static_cast<int16_t>(x);
     event.y = static_cast<int16_t>(y);
-    sendEvent(event);
+    sendInputEvent(event);
 }
 
 void InputSender::sendMouseButton(float x, float y, int button, bool pressed, int modifiers)
@@ -94,7 +97,7 @@ void InputSender::sendMouseButton(float x, float y, int button, bool pressed, in
     event.modifiers = static_cast<uint8_t>(modifiers);
     event.x = static_cast<int16_t>(x);
     event.y = static_cast<int16_t>(y);
-    sendEvent(event);
+    sendInputEvent(event);
 }
 
 void InputSender::sendMouseScroll(float x, float y, float deltaX, float deltaY, int modifiers)
@@ -108,7 +111,7 @@ void InputSender::sendMouseScroll(float x, float y, float deltaX, float deltaY, 
     event.y = static_cast<int16_t>(y);
     event.data1 = static_cast<int16_t>(deltaX * 100.0f);
     event.data2 = static_cast<int16_t>(deltaY * 100.0f);
-    sendEvent(event);
+    sendInputEvent(event);
 }
 
 void InputSender::sendKey(int keyCode, uint32_t codepoint, bool pressed, int modifiers)
@@ -120,7 +123,7 @@ void InputSender::sendKey(int keyCode, uint32_t codepoint, bool pressed, int mod
     event.x = static_cast<int16_t>(keyCode);
     event.data1 = static_cast<int16_t>(codepoint & 0xFFFF);
     event.data2 = static_cast<int16_t>((codepoint >> 16) & 0xFFFF);
-    sendEvent(event);
+    sendInputEvent(event);
 }
 
 void InputSender::sendFocus(bool focused)
@@ -128,23 +131,30 @@ void InputSender::sendFocus(bool focused)
     InputEvent event = {};
     event.type = INPUT_EVENT_FOCUS;
     event.data1 = focused ? 1 : 0;
-    sendEvent(event);
+    sendInputEvent(event);
 }
 
 void InputSender::sendResize(int width, int height, float scale, uint32_t newSurfaceID)
 {
+    if (pipeFD < 0) return;
+
     InputEvent event = {};
     event.type = INPUT_EVENT_RESIZE;
     event.x = static_cast<int16_t>(width);
     event.y = static_cast<int16_t>(height);
-    event.data1 = static_cast<int16_t>(scale * 100);  // Scale factor as fixed-point
-    event.timestamp = newSurfaceID;  // Overwritten by sendEvent, so set directly
-    
-    if (pipeFD < 0) return;
+    event.data1 = static_cast<int16_t>(scale * 100);
+    event.timestamp = newSurfaceID;
 
 #if JUCE_MAC || JUCE_LINUX
-    // For resize, timestamp carries the new surface ID, not actual time
-    ssize_t written = write(pipeFD, &event, sizeof(InputEvent));
+    uint8_t prefix = EVENT_TYPE_INPUT;
+    ssize_t written = write(pipeFD, &prefix, 1);
+    if (written != 1)
+    {
+        pipeFD = -1;
+        return;
+    }
+
+    written = write(pipeFD, &event, sizeof(InputEvent));
     if (written != sizeof(InputEvent))
         pipeFD = -1;
 #endif
@@ -154,28 +164,28 @@ void InputSender::sendEvent(const juce::ValueTree& tree)
 {
     if (pipeFD < 0) return;
 
-    // Serialize ValueTree to binary
     juce::MemoryOutputStream stream;
     tree.writeToStream(stream);
-    
+
     const void* data = stream.getData();
-    size_t dataSize = stream.getDataSize();
-    
-    // Build header event with payload length in timestamp field
-    InputEvent event = {};
-    event.type = JUCE_EVENT_GENERIC;
-    event.timestamp = static_cast<uint32_t>(dataSize);
+    uint32_t dataSize = static_cast<uint32_t>(stream.getDataSize());
 
 #if JUCE_MAC || JUCE_LINUX
-    // Write header
-    ssize_t written = write(pipeFD, &event, sizeof(InputEvent));
-    if (written != sizeof(InputEvent))
+    uint8_t prefix = EVENT_TYPE_JUCE;
+    ssize_t written = write(pipeFD, &prefix, 1);
+    if (written != 1)
     {
         pipeFD = -1;
         return;
     }
-    
-    // Write payload
+
+    written = write(pipeFD, &dataSize, 4);
+    if (written != 4)
+    {
+        pipeFD = -1;
+        return;
+    }
+
     written = write(pipeFD, data, dataSize);
     if (written != static_cast<ssize_t>(dataSize))
         pipeFD = -1;

@@ -34,11 +34,10 @@ class InputDispatcher(
      */
     fun dispatch(event: InputEvent) {
         when (event.type) {
-            EventType.MOUSE -> dispatchMouseEvent(event)
-            EventType.KEY -> dispatchKeyEvent(event)
-            EventType.FOCUS -> dispatchFocusEvent(event)
-            EventType.RESIZE -> dispatchResizeEvent(event)
-            // GENERIC events are handled separately via EventReceiver.onEvent
+            InputType.MOUSE -> dispatchMouseEvent(event)
+            InputType.KEY -> dispatchKeyEvent(event)
+            InputType.FOCUS -> dispatchFocusEvent(event)
+            InputType.RESIZE -> dispatchResizeEvent(event)
         }
     }
     
