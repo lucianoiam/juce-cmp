@@ -28,7 +28,9 @@ fun main(args: Array<String>) {
             UserInterface()
         }
     } else {
-        // Standalone mode - regular desktop window
+        // Standalone mode - regular desktop window for development.
+        // Allows running the Compose UI independently with hot reload,
+        // without requiring the JUCE host.
         application {
             Window(
                 onCloseRequest = ::exitApplication,
