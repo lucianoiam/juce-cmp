@@ -125,6 +125,21 @@
     return NO;
 }
 
+- (void)viewDidMoveToWindow {
+    [super viewDidMoveToWindow];
+    _displayLink.paused = (self.window == nil);
+}
+
+- (void)viewDidHide {
+    [super viewDidHide];
+    _displayLink.paused = YES;
+}
+
+- (void)viewDidUnhide {
+    [super viewDidUnhide];
+    _displayLink.paused = NO;
+}
+
 /// CADisplayLink callback - triggers layer redraw on each vsync.
 - (void)displayLinkFired:(CADisplayLink*)link {
     (void)link;
