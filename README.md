@@ -55,7 +55,7 @@ The module uses IOSurface for zero-copy GPU rendering, enabling efficient integr
 
 **Input:** Mouse/keyboard events are captured by the JUCE component and sent to the child via a 16-byte binary protocol over stdin. The UI deserializes and injects them into the Compose scene.
 
-**Bidirectional IPC:** Host→UI uses GENERIC events carrying ValueTree payloads via stdin. UI→Host uses length-prefixed ValueTree binary data via stdout. The library has no knowledge of parameters—apps interpret ValueTree content.
+**Bidirectional IPC:** Host→UI uses events of type JUCE carrying ValueTree payloads via stdin. UI→Host uses length-prefixed ValueTree binary data via stdout. The library has no knowledge of parameters—apps interpret ValueTree content.
 
 ## Project Structure
 
@@ -229,7 +229,7 @@ Events are 16-byte binary structs sent over stdin (see `juce_cmp/juce_cmp/ipc_pr
 
 | Offset | Size | Field      | Description                           |
 |--------|------|------------|---------------------------------------|
-| 0      | 1    | type       | 1=mouse, 2=key, 3=focus, 4=resize, 5=generic |
+| 0      | 1    | type       | 0=input, 1=cmp, 2=juce |
 | 1      | 1    | action     | 1=press, 2=release, 3=move, 4=scroll  |
 | 2      | 1    | button     | Mouse button (1=left, 2=right, 3=mid) |
 | 3      | 1    | modifiers  | Bitmask: 1=shift, 2=ctrl, 4=alt, 8=meta |
@@ -245,9 +245,9 @@ Events are 16-byte binary structs sent over stdin (see `juce_cmp/juce_cmp/ipc_pr
 - `size` (uint32_t, little-endian) - ValueTree data size in bytes
 - `data` (N bytes) - ValueTree binary serialization (JUCE-compatible)
 
-**Host→UI (stdin GENERIC event):**
-- 16-byte header with `type=5` (GENERIC), `timestamp=payload_length`
-- Followed by `payload_length` bytes of ValueTree binary data
+**Host→UI (stdin event of type JUCE):**
+- 1-byte type prefix (`EVENT_TYPE_JUCE=2`)
+- 4-byte size (little-endian) + ValueTree binary data
 
 **Example (app-level interpretation as parameter):**
 ```kotlin

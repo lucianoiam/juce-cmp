@@ -23,9 +23,9 @@ object Library {
     private var scaleFactor: Float = 1f
 
     /**
-     * Whether the application is running in embedded mode (launched by a host).
+     * Whether the application was launched by a host.
      */
-    val isEmbedded: Boolean
+    val hasHost: Boolean
         get() = surfaceID != null
 
     /**
@@ -84,12 +84,12 @@ object Library {
      * @param onFrameRendered Optional callback after each frame (for debugging/capture)
      * @param content The Compose content to render
      */
-    fun embeddedApplication(
+    fun host(
         onEvent: ((tree: JuceValueTree) -> Unit)? = null,
         onFrameRendered: ((frameNumber: Long, surface: org.jetbrains.skia.Surface) -> Unit)? = null,
         content: @Composable () -> Unit
     ) {
-        val id = surfaceID ?: error("embeddedApplication() called but not in embedded mode")
+        val id = surfaceID ?: error("host() called but not in embedded mode")
 
         runIOSurfaceRenderer(
             surfaceID = id,

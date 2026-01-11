@@ -39,19 +39,14 @@ public:
     using FirstFrameCallback = std::function<void()>;
     void onFirstFrame(FirstFrameCallback callback) { firstFrameCallback = std::move(callback); }
 
-    /// Send a GENERIC event from host to UI (ValueTree payload)
+    /// Send an event of type JUCE from host to UI (ValueTree payload)
     void sendEvent(const juce::ValueTree& tree) { inputSender.sendEvent(tree); }
 
     /// Set an image to display while the child process loads (optional)
     /// @param image The preview image to show
     /// @param backgroundColor Background color behind the image (default: transparent)
     void setLoadingPreview(const juce::Image& image,
-                           juce::Colour backgroundColor = juce::Colour())
-    {
-        loadingPreview = image;
-        loadingBackgroundColor = backgroundColor;
-        repaint();  // Trigger redraw to show loading preview
-    }
+                           juce::Colour backgroundColor = juce::Colour());
 
     /// Returns true if the Compose child process has launched
     bool isProcessReady() const { return childLaunched; }

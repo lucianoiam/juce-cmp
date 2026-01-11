@@ -29,8 +29,21 @@ import juce_cmp.events.EventSender
  * ```
  */
 object ParameterState {
+    /** Parameter indices - must match host definitions */
+    object Index {
+        const val Shape = 0
+    }
+
     // Thread-safe observable map of parameter ID -> value
     private val parameters: SnapshotStateMap<Int, Float> = mutableStateMapOf()
+
+    /**
+     * Get the current value of a parameter.
+     * Returns the default if not yet set.
+     */
+    fun get(paramId: Int, default: Float = 0f): Float {
+        return parameters[paramId] ?: default
+    }
 
     /**
      * Set a parameter value from the UI.
@@ -45,6 +58,11 @@ object ParameterState {
     }
 
     /**
+     * Get the state map for observation in Compose.
+     */
+    fun getState(): SnapshotStateMap<Int, Float> = parameters
+
+    /**
      * Handle a "param" event from the host.
      * Updates local state without sending back to host.
      */
@@ -57,17 +75,4 @@ object ParameterState {
             }
         }
     }
-
-    /**
-     * Get the current value of a parameter.
-     * Returns the default if not yet set.
-     */
-    fun get(paramId: Int, default: Float = 0f): Float {
-        return parameters[paramId] ?: default
-    }
-
-    /**
-     * Get the state map for observation in Compose.
-     */
-    fun getState(): SnapshotStateMap<Int, Float> = parameters
 }

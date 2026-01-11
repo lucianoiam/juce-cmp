@@ -30,7 +30,7 @@ import java.util.concurrent.atomic.AtomicReference
  * @param surfaceID The IOSurface ID to render to
  * @param scaleFactor The display scale factor (e.g., 2.0 for Retina)
  * @param onFrameRendered Optional callback invoked after each frame is rendered
- * @param onEvent Optional callback when host sends GENERIC events (JuceValueTree payload)
+ * @param onEvent Optional callback when host sends events of type JUCE (JuceValueTree payload)
  * @param content The Compose content to render
  */
 fun runIOSurfaceRenderer(

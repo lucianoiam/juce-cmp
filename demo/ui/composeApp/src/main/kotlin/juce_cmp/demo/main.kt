@@ -19,8 +19,8 @@ fun main(args: Array<String>) {
     // MUST be first - initializes library and parses args
     Library.init(args)
 
-    if (Library.isEmbedded) {
-        Library.embeddedApplication(
+    if (Library.hasHost) {
+        Library.host(
             // DEV: Uncomment to generate loading_preview.png from first rendered frame
             // onFrameRendered = captureFirstFrame("/tmp/loading_preview.png"),
             onEvent = ParameterState::onEvent

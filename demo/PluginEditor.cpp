@@ -42,7 +42,7 @@ PluginEditor::PluginEditor(PluginProcessor& p)
 
     // Wire up Host→UI parameter changes (automation from DAW, etc.)
     p.setParameterChangedCallback([this](int paramIndex, float value) {
-        // Forward to Compose UI as GENERIC event with ValueTree payload
+        // Forward to Compose UI as event of type JUCE with ValueTree payload
         juce::ValueTree tree("param");
         tree.setProperty("id", paramIndex, nullptr);
         tree.setProperty("value", static_cast<double>(value), nullptr);

@@ -241,6 +241,13 @@ ComposeComponent::ComposeComponent()
     setInterceptsMouseClicks(true, true);
 }
 
+void ComposeComponent::setLoadingPreview(const juce::Image& image, juce::Colour backgroundColor)
+{
+    loadingPreview = image;
+    loadingBackgroundColor = backgroundColor;
+    repaint();
+}
+
 ComposeComponent::~ComposeComponent()
 {
     if (auto* topLevel = getTopLevelComponent())

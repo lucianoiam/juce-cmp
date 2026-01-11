@@ -15,6 +15,7 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.unit.dp
 import org.jetbrains.compose.ui.tooling.preview.Preview
 import juce_cmp.widgets.ResizeHandle
+import juce_cmp.demo.ParameterState.Index.Shape
 
 @Composable
 @Preview
@@ -47,7 +48,7 @@ fun UserInterface() {
 
                 // Observe ParameterState so host automation updates the UI
                 val paramState = ParameterState.getState()
-                val shapeValue = paramState[0] ?: 0f
+                val shapeValue = paramState[Shape] ?: 0f
 
                 Column(
                     horizontalAlignment = Alignment.CenterHorizontally,
@@ -61,7 +62,7 @@ fun UserInterface() {
                     Spacer(modifier = Modifier.height(8.dp))
                     Knob(
                         value = shapeValue,
-                        onValueChange = { ParameterState.set(0, it) }
+                        onValueChange = { ParameterState.set(Shape, it) }
                     )
                     Spacer(modifier = Modifier.height(8.dp))
                     Text(
