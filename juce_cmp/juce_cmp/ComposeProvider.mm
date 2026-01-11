@@ -190,10 +190,9 @@ public:
             if (!workDir.empty())
                 chdir(workDir.c_str());
 
-            execl(execPath.c_str(), 
-                  execPath.c_str(), 
-                  "--embed", 
-                  surfaceArg.c_str(), 
+            execl(execPath.c_str(),
+                  execPath.c_str(),
+                  surfaceArg.c_str(),
                   scaleArg.c_str(),
                   nullptr);
             

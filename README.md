@@ -149,19 +149,13 @@ dependencies {
 
 // main.kt
 import juce_cmp.Library
-import juce_cmp.renderer.runIOSurfaceRenderer
 
 fun main(args: Array<String>) {
-    Library.init()  // MUST be first
-    if (args.contains("--embed")) {
-        val surfaceID = args.first { it.startsWith("--iosurface-id=") }
-            .substringAfter("=").toInt()
-        val scale = args.first { it.startsWith("--scale=") }
-            .substringAfter("=").toFloat()
+    Library.init(args)  // MUST be first - parses args, sets up IPC
 
-        runIOSurfaceRenderer(surfaceID, scale) {
-            MyApp()  // Your @Composable UI
-        }
+    if (Library.hasHost) {
+        // Embedded mode - render to host's shared surface
+        Library.host { MyApp() }
     } else {
         // Standalone window mode
         application {
@@ -219,8 +213,7 @@ To validate: `auval -v aumu JCMs JCMm`
 ## Command-Line Flags
 
 The UI app supports these flags when launched by the plugin:
-- `--embed` - Run as embedded renderer (required for plugin mode)
-- `--iosurface-id=<id>` - IOSurface ID to render to
+- `--iosurface-id=<id>` - IOSurface ID to render to (implies embedded mode)
 - `--scale=<factor>` - Backing scale factor (e.g., 2.0 for Retina)
 
 ## IPC Protocol

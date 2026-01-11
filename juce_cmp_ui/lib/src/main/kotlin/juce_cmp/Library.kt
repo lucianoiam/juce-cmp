@@ -45,17 +45,16 @@ object Library {
         if (initialized) return
         initialized = true
 
-        // Parse args to detect embedded mode
-        if (args.contains("--embed")) {
+        // Parse --iosurface-id=<id> to detect embedded mode
+        val iosurfaceArg = args.firstOrNull { it.startsWith("--iosurface-id=") }
+        if (iosurfaceArg != null) {
             // Hide from Dock - we're a background renderer for the host
             System.setProperty("apple.awt.UIElement", "true")
 
-            // Parse --iosurface-id=<id> from host
-            surfaceID = args
-                .firstOrNull { it.startsWith("--iosurface-id=") }
-                ?.substringAfter("=")
-                ?.toIntOrNull()
-                ?: error("Missing --iosurface-id=<id> argument")
+            surfaceID = iosurfaceArg
+                .substringAfter("=")
+                .toIntOrNull()
+                ?: error("Invalid --iosurface-id value")
 
             // Parse --scale=<factor> for Retina support (e.g., 2.0)
             scaleFactor = args

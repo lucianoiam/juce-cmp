@@ -13,7 +13,7 @@ import juce_cmp.renderer.captureFirstFrame
  *
  * Supports two modes:
  * - Standalone: Normal desktop window (default)
- * - Embedded: Renders to host's shared surface (--embed flag)
+ * - Embedded: Renders to host's shared surface (when --iosurface-id is provided)
  */
 fun main(args: Array<String>) {
     // MUST be first - initializes library and parses args
