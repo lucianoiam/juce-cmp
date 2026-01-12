@@ -5,10 +5,7 @@
 
 // Include all C++ implementation files (can be compiled in .mm on macOS)
 #include "juce_cmp/Ipc.cpp"
-#include "juce_cmp/ChildProcess.cpp"
 
 // Include all Objective-C++ implementation files
-#include "juce_cmp/Surface.mm"
-#include "juce_cmp/SurfaceView.mm"
 #include "juce_cmp/ComposeProvider.mm"
 #include "juce_cmp/ComposeComponent.mm"

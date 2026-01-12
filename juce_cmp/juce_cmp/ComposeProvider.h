@@ -4,85 +4,60 @@
 #pragma once
 
 #include <juce_core/juce_core.h>
-#include <juce_data_structures/juce_data_structures.h>
 #include <cstdint>
+#include <string>
 #include <functional>
-#include "ipc_protocol.h"
 
 namespace juce_cmp
 {
 
 /**
- * ComposeProvider - Manages everything needed to display Compose UI.
+ * ComposeProvider - Creates shared surfaces and manages the child UI process.
  *
- * Responsibilities:
- * - Shared surface lifecycle (IOSurface on macOS)
- * - Child process lifecycle
- * - Native view for display
- * - Bidirectional IPC
- *
- * ComposeComponent uses this as a black box - just calls start/stop
- * and forwards input events.
+ * On macOS: Uses IOSurface for zero-copy GPU sharing
+ * On Windows: Will use DXGI shared textures (TODO)
+ * On Linux: Will use shared memory or Vulkan external memory (TODO)
  */
 class ComposeProvider
 {
 public:
-    using EventHandler = std::function<void(const juce::ValueTree& tree)>;
-    using FirstFrameHandler = std::function<void()>;
-    using ReadyHandler = std::function<void()>;
-
     ComposeProvider();
     ~ComposeProvider();
 
-    // =========================================================================
-    // Lifecycle
-    // =========================================================================
+    /** Create a shared surface with the given dimensions. */
+    bool createSurface(int width, int height);
 
-    /**
-     * Start the Compose UI with the given dimensions and scale.
-     * @param width Initial width in points
-     * @param height Initial height in points
-     * @param scale Backing scale factor (e.g., 2.0 for Retina)
-     * @param peerView Native view handle to attach display to
-     * @return true if successfully started
-     */
-    bool start(int width, int height, float scale, void* peerView);
+    /** Resize the surface. Returns the new surface ID. */
+    uint32_t resizeSurface(int width, int height);
 
-    /** Stop the Compose UI. */
-    void stop();
+    /** Get the current surface ID (passed to child process). */
+    uint32_t getSurfaceID() const;
 
-    /** Returns true if running. */
-    bool isRunning() const;
+    /** Get the native surface handle (IOSurfaceRef on macOS). */
+    void* getNativeSurface() const;
 
-    // =========================================================================
-    // Events (set before calling start)
-    // =========================================================================
+    /** Get surface dimensions. */
+    int getWidth() const;
+    int getHeight() const;
 
-    void setEventHandler(EventHandler handler) { eventHandler = std::move(handler); }
-    void setFirstFrameHandler(FirstFrameHandler handler) { firstFrameHandler = std::move(handler); }
-    void setReadyHandler(ReadyHandler handler) { readyHandler = std::move(handler); }
+    /** Launch the child Compose UI process with scale factor for Retina support. */
+    bool launchChild(const std::string& executable, float scale = 1.0f, const std::string& workingDir = "");
 
-    // =========================================================================
-    // Input (call after start)
-    // =========================================================================
+    /** Stop the child process. */
+    void stopChild();
 
-    void sendInput(InputEvent& event);
-    void sendEvent(const juce::ValueTree& tree);
+    /** Check if child is running. */
+    bool isChildRunning() const;
 
-    // =========================================================================
-    // Display (call after start)
-    // =========================================================================
+    /** Get the stdin pipe file descriptor for input forwarding. */
+    int getInputPipeFD() const;
 
-    void updateBounds(int x, int y, int width, int height);
-    void resize(int width, int height);
+    /** Get the stdout pipe file descriptor for reading UI messages. */
+    int getStdoutPipeFD() const;
 
 private:
     class Impl;
     std::unique_ptr<Impl> pImpl;
-
-    EventHandler eventHandler;
-    FirstFrameHandler firstFrameHandler;
-    ReadyHandler readyHandler;
 };
 
 }  // namespace juce_cmp
