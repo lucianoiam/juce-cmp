@@ -4,10 +4,11 @@
 package juce_cmp
 
 import androidx.compose.runtime.Composable
-import juce_cmp.events.EventSender
-import juce_cmp.events.JuceValueTree
+import juce_cmp.ipc.Ipc
+import juce_cmp.ipc.JuceValueTree
 import juce_cmp.renderer.runIOSurfaceRenderer
 import java.io.FileDescriptor
+import java.io.FileInputStream
 import java.io.FileOutputStream
 import java.io.PrintStream
 
@@ -21,12 +22,20 @@ object Library {
     private var initialized = false
     private var surfaceID: Int? = null
     private var scaleFactor: Float = 1f
+    private var ipc: Ipc? = null
 
     /**
      * Whether the application was launched by a host.
      */
     val hasHost: Boolean
         get() = surfaceID != null
+
+    /**
+     * Send a JuceValueTree event to the host.
+     */
+    fun send(tree: JuceValueTree) {
+        ipc?.send(tree)
+    }
 
     /**
      * Initialize the juce_cmp library.
@@ -64,9 +73,12 @@ object Library {
                 ?: 1f
         }
 
-        // Capture the raw stdout before anyone else can pollute it
-        // FileDescriptor.out is the JVM's reference to fd 1
-        EventSender.setOutput(FileOutputStream(FileDescriptor.out))
+        // Capture the raw stdin/stdout before anyone else can pollute them
+        // FileDescriptor.in/out are the JVM's references to fd 0/1
+        ipc = Ipc(
+            input = FileInputStream(FileDescriptor.`in`),
+            output = FileOutputStream(FileDescriptor.out)
+        )
 
         // Redirect System.out to stderr so library noise doesn't corrupt our protocol
         // All println(), library warnings, etc. will now go to stderr
@@ -89,12 +101,14 @@ object Library {
         content: @Composable () -> Unit
     ) {
         val id = surfaceID ?: error("host() called but not in embedded mode")
+        val channel = ipc ?: error("host() called but IPC not initialized")
 
         runIOSurfaceRenderer(
             surfaceID = id,
             scaleFactor = scaleFactor,
+            ipc = channel,
             onFrameRendered = onFrameRendered,
-            onEvent = onEvent,
+            onJuceEvent = onEvent,
             content = content
         )
     }

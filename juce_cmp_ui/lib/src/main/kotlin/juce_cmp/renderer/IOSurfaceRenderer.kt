@@ -14,9 +14,8 @@ import com.sun.jna.Native
 import com.sun.jna.Pointer
 import com.sun.jna.ptr.IntByReference
 import kotlinx.coroutines.*
-import juce_cmp.events.EventReceiver
-import juce_cmp.events.EventSender
-import juce_cmp.events.JuceValueTree
+import juce_cmp.ipc.Ipc
+import juce_cmp.ipc.JuceValueTree
 import juce_cmp.input.InputDispatcher
 import juce_cmp.input.InputEvent
 import juce_cmp.input.InputType
@@ -29,27 +28,29 @@ import java.util.concurrent.atomic.AtomicReference
  *
  * @param surfaceID The IOSurface ID to render to
  * @param scaleFactor The display scale factor (e.g., 2.0 for Retina)
+ * @param ipc The IPC channel for communication with host
  * @param onFrameRendered Optional callback invoked after each frame is rendered
- * @param onEvent Optional callback when host sends events of type JUCE (JuceValueTree payload)
+ * @param onJuceEvent Optional callback when host sends events of type JUCE (JuceValueTree payload)
  * @param content The Compose content to render
  */
 fun runIOSurfaceRenderer(
     surfaceID: Int,
     scaleFactor: Float = 1f,
+    ipc: Ipc,
     onFrameRendered: ((frameNumber: Long, surface: Surface) -> Unit)? = null,
-    onEvent: ((tree: JuceValueTree) -> Unit)? = null,
+    onJuceEvent: ((tree: JuceValueTree) -> Unit)? = null,
     content: @Composable () -> Unit
 ) {
-    runIOSurfaceRendererImpl(surfaceID, scaleFactor, onFrameRendered, onEvent, content)
+    runIOSurfaceRendererImpl(surfaceID, scaleFactor, ipc, onFrameRendered, onJuceEvent, content)
 }
 
 /**
- * Native Metal library for zero-copy IOSurface rendering.
+ * Native library for zero-copy IOSurface rendering.
  *
  * Provides Metal device/queue pointers and IOSurface-backed textures
  * that Skia can render to directly.
  */
-private interface MetalRendererLib : Library {
+private interface NativeLib : Library {
     fun createMetalContext(): Pointer?
     fun destroyMetalContext(context: Pointer)
     fun getMetalDevice(context: Pointer): Pointer?
@@ -59,10 +60,10 @@ private interface MetalRendererLib : Library {
     fun flushAndSync(context: Pointer)
 
     companion object {
-        val INSTANCE: MetalRendererLib by lazy {
+        val INSTANCE: NativeLib by lazy {
             // Extract native library from JAR resources at runtime
             val libFile = Native.extractFromResourcePath("iosurface_renderer")
-            Native.load(libFile.absolutePath, MetalRendererLib::class.java)
+            Native.load(libFile.absolutePath, NativeLib::class.java)
         }
     }
 }
@@ -81,7 +82,7 @@ private class RenderResources(
     override fun close() {
         skiaSurface.close()
         directContext.close()
-        MetalRendererLib.INSTANCE.releaseIOSurfaceTexture(texturePtr)
+        NativeLib.INSTANCE.releaseIOSurfaceTexture(texturePtr)
     }
 }
 
@@ -96,7 +97,7 @@ private fun createRenderResources(
 ): RenderResources {
     val widthRef = IntByReference()
     val heightRef = IntByReference()
-    val texturePtr = MetalRendererLib.INSTANCE.createIOSurfaceTexture(
+    val texturePtr = NativeLib.INSTANCE.createIOSurfaceTexture(
         metalContext, surfaceID, widthRef, heightRef
     ) ?: error("Failed to create IOSurface-backed texture for surface ID $surfaceID")
 
@@ -148,21 +149,22 @@ private fun createRenderResources(
 private fun runIOSurfaceRendererImpl(
     surfaceID: Int,
     scaleFactor: Float = 1f,
+    ipc: Ipc,
     onFrameRendered: ((frameNumber: Long, surface: Surface) -> Unit)? = null,
-    onEvent: ((tree: JuceValueTree) -> Unit)? = null,
+    onJuceEvent: ((tree: JuceValueTree) -> Unit)? = null,
     content: @Composable () -> Unit
 ) {
     // println("[GPU] Initializing zero-copy Metal renderer (scale=$scaleFactor)...")
     
     // Create Metal context (device + command queue)
-    val metalContext = MetalRendererLib.INSTANCE.createMetalContext()
+    val metalContext = NativeLib.INSTANCE.createMetalContext()
         ?: error("Failed to create Metal context")
     
     try {
         // Get Metal device and queue pointers for Skia
-        val devicePtr = MetalRendererLib.INSTANCE.getMetalDevice(metalContext)
+        val devicePtr = NativeLib.INSTANCE.getMetalDevice(metalContext)
             ?: error("Failed to get Metal device")
-        val queuePtr = MetalRendererLib.INSTANCE.getMetalQueue(metalContext)
+        val queuePtr = NativeLib.INSTANCE.getMetalQueue(metalContext)
             ?: error("Failed to get Metal queue")
         
         // println("[GPU] Metal device=${Pointer.nativeValue(devicePtr)}, queue=${Pointer.nativeValue(queuePtr)}")
@@ -176,8 +178,8 @@ private fun runIOSurfaceRendererImpl(
         // Event queue for input events
         val eventQueue = ConcurrentLinkedQueue<InputEvent>()
         
-        // Start event receiver (receives input events from host via stdin)
-        val eventReceiver = EventReceiver(
+        // Start receiving events from host via stdin
+        ipc.startReceiving(
             onInputEvent = { event ->
                 if (event.type == InputType.RESIZE) {
                     // Resize events handled specially - store for main loop
@@ -189,9 +191,8 @@ private fun runIOSurfaceRendererImpl(
                 }
                 needsRedraw.set(true)
             },
-            onEvent = onEvent
+            onJuceEvent = onJuceEvent
         )
-        eventReceiver.start()
         // println("[GPU] Input receiver started")
         
         // Initial render resources
@@ -223,7 +224,7 @@ private fun runIOSurfaceRendererImpl(
                 var frameCount = 0
                 
                 // Run until stdin closes (host signals exit by closing pipe)
-                while (eventReceiver.isRunning) {
+                while (ipc.isRunning) {
                     try {
                         val frameStart = System.nanoTime()
                         
@@ -288,7 +289,7 @@ private fun runIOSurfaceRendererImpl(
                         onFrameRendered?.invoke(frameCount.toLong(), resources.skiaSurface)
 
                         if (frameCount == 0) {
-                            EventSender.sendFirstFrameRendered()
+                            ipc.sendFirstFrameRendered()
                         }
                         frameCount++
                         needsRedraw.set(false)
@@ -302,12 +303,12 @@ private fun runIOSurfaceRendererImpl(
                 }
             }
         } finally {
-            eventReceiver.stop()
+            ipc.stopReceiving()
             scene.close()
             resources.close()
         }
     } finally {
-        MetalRendererLib.INSTANCE.destroyMetalContext(metalContext)
+        NativeLib.INSTANCE.destroyMetalContext(metalContext)
     }
 }
 

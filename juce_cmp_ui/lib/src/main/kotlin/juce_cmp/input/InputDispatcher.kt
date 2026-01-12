@@ -11,7 +11,7 @@ import androidx.compose.ui.scene.ComposeScene
 /**
  * Dispatches input events from the binary protocol to a ComposeScene.
  *
- * This bridges the EventReceiver (reading from stdin) to Compose's event system.
+ * This bridges the IPC channel (reading from stdin) to Compose's event system.
  * Runs on the main/render thread to ensure thread safety with Compose.
  *
  * @param scene The ComposeScene to dispatch events to
@@ -36,8 +36,6 @@ class InputDispatcher(
         when (event.type) {
             InputType.MOUSE -> dispatchMouseEvent(event)
             InputType.KEY -> dispatchKeyEvent(event)
-            InputType.FOCUS -> dispatchFocusEvent(event)
-            InputType.RESIZE -> dispatchResizeEvent(event)
         }
     }
     
@@ -123,16 +121,5 @@ class InputDispatcher(
         )
         
         scene.sendKeyEvent(androidx.compose.ui.input.key.KeyEvent(awtKeyEvent))
-    }
-    
-    private fun dispatchFocusEvent(event: InputEvent) {
-        // TODO: Handle focus changes if needed
-        // scene.requestFocus() or similar
-    }
-    
-    private fun dispatchResizeEvent(event: InputEvent) {
-        // TODO: Handle resize - would need to recreate surfaces
-        // This is complex and may require re-architecture
-        System.err.println("[Input] Resize event: ${event.x}x${event.y} - not yet implemented")
     }
 }

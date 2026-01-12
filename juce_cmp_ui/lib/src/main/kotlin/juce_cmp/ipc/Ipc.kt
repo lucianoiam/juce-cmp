@@ -1,42 +1,54 @@
 // SPDX-FileCopyrightText: 2026 Luciano Iam <oss@lucianoiam.com>
 // SPDX-License-Identifier: MIT
 
-package juce_cmp.events
+package juce_cmp.ipc
 
 import java.io.InputStream
+import java.io.OutputStream
 import java.nio.ByteBuffer
 import java.nio.ByteOrder
 import juce_cmp.input.InputEvent
 
 /**
- * Receives binary events from the host process via stdin pipe.
+ * Bidirectional IPC channel between UI and host process.
  *
  * Protocol: 1-byte event type followed by type-specific payload.
  * See ipc_protocol.h for details.
  *
- * Note: This is the Kotlin-side EventReceiver (host → UI direction).
- * The C++ EventReceiver in juce_cmp handles the opposite direction (UI → host).
+ * - Receiving runs on a background thread (host → UI)
+ * - Sending is synchronous and thread-safe (UI → host)
  */
-class EventReceiver(
-    private val input: InputStream = System.`in`,
-    private val onInputEvent: (InputEvent) -> Unit,
-    private val onEvent: ((JuceValueTree) -> Unit)? = null
+class Ipc(
+    private val input: InputStream,
+    private val output: OutputStream
 ) {
     @Volatile
     private var running = false
     private var thread: Thread? = null
+    private val writeLock = Any()
 
     private companion object {
         const val EVENT_TYPE_INPUT = 0
         const val EVENT_TYPE_CMP = 1
         const val EVENT_TYPE_JUCE = 2
+        const val CMP_SUBTYPE_FIRST_FRAME = 0
     }
 
     /** Returns true if the receiver is still running (stdin not closed) */
     val isRunning: Boolean get() = running
 
-    fun start() {
+    // ---- Receiving (Host → UI) ----
+
+    private var onInputEvent: ((InputEvent) -> Unit)? = null
+    private var onJuceEvent: ((JuceValueTree) -> Unit)? = null
+
+    fun startReceiving(
+        onInputEvent: (InputEvent) -> Unit,
+        onJuceEvent: ((JuceValueTree) -> Unit)? = null
+    ) {
         if (running) return
+        this.onInputEvent = onInputEvent
+        this.onJuceEvent = onJuceEvent
         running = true
         thread = Thread({
             while (running) {
@@ -56,9 +68,15 @@ class EventReceiver(
                     // Silently ignore exceptions when running
                 }
             }
-        }, "EventReceiver")
+        }, "Ipc")
         thread?.isDaemon = true
         thread?.start()
+    }
+
+    fun stopReceiving() {
+        running = false
+        thread?.interrupt()
+        thread = null
     }
 
     private fun handleInputEvent() {
@@ -86,7 +104,7 @@ class EventReceiver(
                 data2 = byteBuffer.short.toInt(),
                 timestamp = byteBuffer.int.toLong() and 0xFFFFFFFFL
             )
-            onInputEvent(event)
+            onInputEvent?.invoke(event)
         }
     }
 
@@ -113,7 +131,7 @@ class EventReceiver(
 
         if (bytesRead == 4) {
             val size = ByteBuffer.wrap(sizeBuffer).order(ByteOrder.LITTLE_ENDIAN).int
-            if (size > 0 && onEvent != null) {
+            if (size > 0 && onJuceEvent != null) {
                 val payload = ByteArray(size)
                 var payloadRead = 0
                 while (payloadRead < size && running) {
@@ -127,15 +145,40 @@ class EventReceiver(
 
                 if (payloadRead == size) {
                     val tree = JuceValueTree.fromByteArray(payload)
-                    onEvent.invoke(tree)
+                    onJuceEvent?.invoke(tree)
                 }
             }
         }
     }
 
-    fun stop() {
-        running = false
-        thread?.interrupt()
-        thread = null
+    // ---- Sending (UI → Host) ----
+
+    /**
+     * Send a JuceValueTree to the host.
+     * Format: EVENT_TYPE_JUCE + 4-byte size + ValueTree bytes
+     */
+    fun send(tree: JuceValueTree) {
+        val treeBytes = tree.toByteArray()
+        val sizeBuffer = ByteBuffer.allocate(4).order(ByteOrder.LITTLE_ENDIAN)
+        sizeBuffer.putInt(treeBytes.size)
+
+        synchronized(writeLock) {
+            output.write(EVENT_TYPE_JUCE)
+            output.write(sizeBuffer.array())
+            output.write(treeBytes)
+            output.flush()
+        }
+    }
+
+    /**
+     * Notify host that first frame has been rendered and surface is ready.
+     * Format: EVENT_TYPE_CMP + CMP_SUBTYPE_FIRST_FRAME
+     */
+    fun sendFirstFrameRendered() {
+        synchronized(writeLock) {
+            output.write(EVENT_TYPE_CMP)
+            output.write(CMP_SUBTYPE_FIRST_FRAME)
+            output.flush()
+        }
     }
 }

@@ -13,7 +13,7 @@ import com.sun.jna.Pointer
  * Used by CPU renderer to lock/unlock and write pixels directly.
  * GPU renderer uses these indirectly via the native Metal library.
  */
-internal interface IOSurfaceLib : Library {
+internal interface IOSurfaceFramework : Library {
     fun IOSurfaceLookup(surfaceID: Int): Pointer?         // Find surface by ID
     fun IOSurfaceGetWidth(surface: Pointer): Int
     fun IOSurfaceGetHeight(surface: Pointer): Int
@@ -23,9 +23,9 @@ internal interface IOSurfaceLib : Library {
     fun IOSurfaceGetBaseAddress(surface: Pointer): Pointer // Raw pixel pointer
 
     companion object {
-        val INSTANCE: IOSurfaceLib = Native.load(
+        val INSTANCE: IOSurfaceFramework = Native.load(
             "/System/Library/Frameworks/IOSurface.framework/IOSurface",
-            IOSurfaceLib::class.java
+            IOSurfaceFramework::class.java
         )
     }
 }

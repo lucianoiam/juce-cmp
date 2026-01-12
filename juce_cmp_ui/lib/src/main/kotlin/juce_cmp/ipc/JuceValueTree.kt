@@ -1,7 +1,7 @@
 // SPDX-FileCopyrightText: 2026 Luciano Iam <oss@lucianoiam.com>
 // SPDX-License-Identifier: MIT
 
-package juce_cmp.events
+package juce_cmp.ipc
 
 import java.io.ByteArrayOutputStream
 import java.io.InputStream

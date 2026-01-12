@@ -245,10 +245,10 @@ Events are 16-byte binary structs sent over stdin (see `juce_cmp/juce_cmp/ipc_pr
 **Example (app-level interpretation as parameter):**
 ```kotlin
 // UI→Host
-val tree = JuceValueTree("param")
-tree["id"] = paramId      // Int
-tree["value"] = value     // Double
-EventSender.send(tree)  // import juce_cmp.events.*
+val tree = JuceValueTree("param")  // import juce_cmp.ipc.JuceValueTree
+tree["id"] = paramId               // Int
+tree["value"] = value              // Double
+Library.send(tree)
 
 // Host→UI (in onEvent callback)
 if (tree.type == "param") {

@@ -5,8 +5,8 @@ package juce_cmp.demo
 
 import androidx.compose.runtime.mutableStateMapOf
 import androidx.compose.runtime.snapshots.SnapshotStateMap
-import juce_cmp.events.JuceValueTree
-import juce_cmp.events.EventSender
+import juce_cmp.Library
+import juce_cmp.ipc.JuceValueTree
 
 /**
  * Global parameter state that syncs between host and UI.
@@ -54,7 +54,7 @@ object ParameterState {
         val tree = JuceValueTree("param")
         tree["id"] = paramId
         tree["value"] = value.toDouble()
-        EventSender.send(tree)
+        Library.send(tree)
     }
 
     /**
