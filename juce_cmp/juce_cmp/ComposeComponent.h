@@ -6,6 +6,7 @@
 #include <juce_gui_basics/juce_gui_basics.h>
 #include <juce_data_structures/juce_data_structures.h>
 #include "ComposeProvider.h"
+#include "SurfaceView.h"
 #include "Ipc.h"
 #include <functional>
 
@@ -76,6 +77,7 @@ private:
 
     void tryLaunchChild();
     void launchChildProcess();
+    void handleResize(int width, int height);
     int getModifiers() const;
     int mapMouseButton(const juce::MouseEvent& event) const;
 
@@ -93,12 +95,10 @@ private:
     juce::Image loadingPreview;
     juce::Colour loadingBackgroundColor;
 
-#if JUCE_MAC
-    void* nativeView = nullptr;  // SurfaceView for displaying IOSurface
-    void attachNativeView();
-    void detachNativeView();
-    void updateNativeViewBounds();
-#endif
+    SurfaceView surfaceView;
+    void attachSurfaceView();
+    void detachSurfaceView();
+    void updateSurfaceViewBounds();
 
     JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR(ComposeComponent)
 };

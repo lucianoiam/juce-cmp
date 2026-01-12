@@ -2,157 +2,18 @@
 // SPDX-License-Identifier: MIT
 
 /**
- * ComposeComponent - JUCE Component that displays Compose UI via IOSurface.
+ * ComposeComponent - JUCE Component that displays Compose UI via shared surface.
  *
  * Architecture:
- * - SurfaceView (NSView): Native view inserted as subview, displays IOSurface
- *   via CALayer.contents. Uses CADisplayLink for vsync-synchronized refresh.
- * - ComposeComponent (juce::Component): Transparent component layered on top
- *   of SurfaceView. Captures all input events and forwards to child process.
- *
- * The separation allows zero-copy GPU display while still using JUCE's input
- * handling. SurfaceView returns nil from hitTest so all events pass through
- * to the JUCE component layer above it.
+ * - SurfaceView: Native view for display (NSView on macOS)
+ * - ComposeComponent: Transparent JUCE component layered on top for input handling
  */
 #include "ComposeComponent.h"
+#include "SurfaceView.h"
 #include <juce_core/juce_core.h>
 
 #if JUCE_MAC
-#include <IOSurface/IOSurface.h>
-#import <QuartzCore/QuartzCore.h>
 #import <AppKit/AppKit.h>
-
-// Private CALayer method to notify that IOSurface contents changed
-// This is required for the compositor to pick up new content when the
-// IOSurface memory is updated by the child process.
-@interface CALayer (IOSurfaceContentsChanged)
-- (void)setContentsChanged;
-@end
-
-/**
- * SurfaceView - NSView that displays IOSurface content via CALayer.
- *
- * This view is purely for display - it never accepts input events.
- * The JUCE component layered above it handles all interaction.
- *
- * Uses CADisplayLink to trigger layer refresh on each vsync, ensuring
- * smooth animation even when the IOSurface content changes every frame.
- */
-@interface SurfaceView : NSView
-
-/// Currently displayed surface
-@property (nonatomic, assign) IOSurfaceRef surface;
-
-/// Pending surface to swap on next frame (allows child time to render)
-@property (nonatomic, assign) IOSurfaceRef pendingSurface;
-
-/// Backing scale factor (e.g., 2.0 for Retina)
-@property (nonatomic, assign) CGFloat backingScale;
-
-/// Vsync-synchronized display refresh (runs on main thread)
-@property (nonatomic, retain) CADisplayLink *displayLink;
-
-/// Callback to request resize from host
-@property (nonatomic, copy) void (^resizeCallback)(NSSize size);
-
-- (void)displayLinkFired:(CADisplayLink*)link;
-
-@end
-
-@implementation SurfaceView
-
-- (instancetype)initWithFrame:(NSRect)frame {
-    self = [super initWithFrame:frame];
-    if (self) {
-        self.wantsLayer = YES;
-        self.backingScale = 1.0;  // Will be updated when added to window
-        self.layer.contentsGravity = kCAGravityTopLeft;
-
-        // Create CADisplayLink for vsync-synchronized updates (runs on main thread)
-        _displayLink = [self.window.screen displayLinkWithTarget:self selector:@selector(displayLinkFired:)];
-        if (!_displayLink) {
-            // Fallback if no screen yet - use main screen
-            _displayLink = [NSScreen.mainScreen displayLinkWithTarget:self selector:@selector(displayLinkFired:)];
-        }
-        [_displayLink addToRunLoop:NSRunLoop.mainRunLoop forMode:NSRunLoopCommonModes];
-    }
-    return self;
-}
-
-- (void)dealloc {
-    [_displayLink invalidate];
-    [_displayLink release];
-    [super dealloc];
-}
-
-- (BOOL)wantsUpdateLayer {
-    return YES;
-}
-
-- (void)updateLayer {
-    if (self.surface) {
-        self.layer.contents = (__bridge id)self.surface;
-        // Scale surface pixels to match display (e.g., 2.0 for Retina)
-        self.layer.contentsScale = self.backingScale;
-        [self.layer setContentsChanged];
-    }
-}
-
-- (void)setSurface:(IOSurfaceRef)surface {
-    _surface = surface;
-    [self.layer setNeedsDisplay];
-}
-
-/// Handle resize request
-- (void)requestResize:(NSSize)newSize {
-    if (newSize.width > 0 && newSize.height > 0 && self.resizeCallback) {
-        self.resizeCallback(newSize);
-    }
-}
-
-// This view is purely for display - never accept any events
-- (NSView*)hitTest:(NSPoint)point {
-    (void)point;
-    return nil;
-}
-
-- (BOOL)acceptsFirstResponder {
-    return NO;
-}
-
-- (BOOL)acceptsFirstMouse:(NSEvent*)event {
-    (void)event;
-    return NO;
-}
-
-- (void)viewDidMoveToWindow {
-    [super viewDidMoveToWindow];
-    _displayLink.paused = (self.window == nil);
-}
-
-- (void)viewDidHide {
-    [super viewDidHide];
-    _displayLink.paused = YES;
-}
-
-- (void)viewDidUnhide {
-    [super viewDidUnhide];
-    _displayLink.paused = NO;
-}
-
-/// CADisplayLink callback - triggers layer redraw on each vsync.
-- (void)displayLinkFired:(CADisplayLink*)link {
-    (void)link;
-    // Swap pending surface if set (gives child one frame to render)
-    if (self.pendingSurface) {
-        self.surface = self.pendingSurface;
-        self.pendingSurface = nil;
-    }
-    [self.layer setNeedsDisplay];
-}
-
-@end
-
 #endif
 
 namespace juce_cmp
@@ -185,25 +46,19 @@ ComposeComponent::~ComposeComponent()
     // Now stop IPC - should exit immediately since child closed FIFO
     ipc.stop();
 
-#if JUCE_MAC
-    detachNativeView();
-#endif
+    detachSurfaceView();
 }
 
 void ComposeComponent::parentHierarchyChanged()
 {
     tryLaunchChild();
-#if JUCE_MAC
     if (childLaunched && getPeer() != nullptr)
-        attachNativeView();
-#endif
+        attachSurfaceView();
 }
 
 void ComposeComponent::componentMovedOrResized(juce::Component&, bool, bool)
 {
-#if JUCE_MAC
-    updateNativeViewBounds();
-#endif
+    updateSurfaceViewBounds();
 }
 
 void ComposeComponent::paint(juce::Graphics& g)
@@ -308,10 +163,8 @@ void ComposeComponent::launchChildProcess()
         ipc.startReceiving();
         
         childLaunched = true;
-#if JUCE_MAC
-        attachNativeView();
-#endif
-        
+        attachSurfaceView();
+
         // Notify that child is ready to receive events
         if (readyCallback)
             readyCallback();
@@ -321,105 +174,71 @@ void ComposeComponent::launchChildProcess()
 void ComposeComponent::resized()
 {
     tryLaunchChild();
-#if JUCE_MAC
-    if (childLaunched && nativeView)
+    if (childLaunched && surfaceView.isValid())
     {
-        updateNativeViewBounds();  // Update NSView frame immediately
-        SurfaceView* view = (__bridge SurfaceView*)nativeView;
+        updateSurfaceViewBounds();
+        // Trigger resize - the callback will handle surface recreation
         auto bounds = getLocalBounds();
-        [view requestResize:NSMakeSize(bounds.getWidth(), bounds.getHeight())];
+        handleResize(bounds.getWidth(), bounds.getHeight());
     }
-#endif
 }
+
+void ComposeComponent::handleResize(int width, int height)
+{
+    if (width <= 0 || height <= 0)
+        return;
+
+    int pixelW = (int)(width * backingScaleFactor);
+    int pixelH = (int)(height * backingScaleFactor);
+    uint32_t newSurfaceID = surfaceProvider.resizeSurface(pixelW, pixelH);
+    if (newSurfaceID != 0)
+    {
+        auto e = InputEventFactory::resize(pixelW, pixelH, backingScaleFactor, newSurfaceID);
+        ipc.sendInput(e);
+        // Set pending surface - will swap on next frame
+        surfaceView.setPendingSurface(surfaceProvider.getNativeSurface());
+    }
+}
+
+void ComposeComponent::attachSurfaceView()
+{
+    auto* peer = getPeer();
+    if (!peer) return;
+    void* peerView = peer->getNativeHandle();
+    if (!peerView) return;
+
+    if (!surfaceView.isValid())
+    {
+        surfaceView.create();
+        surfaceView.setSurface(surfaceProvider.getNativeSurface());
+        surfaceView.setBackingScale(backingScaleFactor);
+    }
+
+    surfaceView.attachToParent(peerView);
+    updateSurfaceViewBounds();
+}
+
+void ComposeComponent::detachSurfaceView()
+{
+    surfaceView.destroy();
+}
+
+void ComposeComponent::updateSurfaceViewBounds()
+{
+    if (!surfaceView.isValid()) return;
+    auto* peer = getPeer();
+    if (!peer) return;
 
 #if JUCE_MAC
-void ComposeComponent::attachNativeView()
-{
-    auto* peer = getPeer();
-    if (!peer) return;
     NSView* peerView = (NSView*)peer->getNativeHandle();
-    if (!peerView) return;
-    
-    if (!nativeView)
-    {
-        SurfaceView* view = [[SurfaceView alloc] initWithFrame:NSZeroRect];
-        nativeView = (void*)view;  // Manual retain - view is released in detachNativeView
-        view.surface = (IOSurfaceRef)surfaceProvider.getNativeSurface();
-        view.backingScale = backingScaleFactor;
-
-        // Set up resize callback
-        ComposeProvider* provider = &surfaceProvider;
-        Ipc* ipcPtr = &ipc;
-        float* scalePtr = &backingScaleFactor;
-        void** nativeViewPtr = &nativeView;
-        view.resizeCallback = ^(NSSize size) {
-            float scale = *scalePtr;
-            int pixelW = (int)(size.width * scale);
-            int pixelH = (int)(size.height * scale);
-            uint32_t newSurfaceID = provider->resizeSurface(pixelW, pixelH);
-            if (newSurfaceID != 0) {
-                auto e = InputEventFactory::resize(pixelW, pixelH, scale, newSurfaceID);
-                ipcPtr->sendInput(e);
-                // Set pending surface - will swap on next CADisplayLink tick
-                // This gives child one frame to render to new surface
-                if (*nativeViewPtr) {
-                    SurfaceView* v = (__bridge SurfaceView*)*nativeViewPtr;
-                    v.pendingSurface = (IOSurfaceRef)provider->getNativeSurface();
-                }
-            }
-        };
-    }
-    
-    SurfaceView* view = (__bridge SurfaceView*)nativeView;
-    if ([view superview] != peerView)
-    {
-        [view removeFromSuperview];
-        [peerView addSubview:view positioned:NSWindowBelow relativeTo:nil];
-    }
-    updateNativeViewBounds();
-}
-
-void ComposeComponent::detachNativeView()
-{
-    if (nativeView)
-    {
-        SurfaceView* view = (__bridge SurfaceView*)nativeView;
-        [view removeFromSuperview];
-        CFRelease(nativeView);
-        nativeView = nullptr;
-    }
-}
-
-void ComposeComponent::updateNativeViewBounds()
-{
-    if (!nativeView) return;
-    auto* peer = getPeer();
-    if (!peer) return;
-    
-    SurfaceView* view = (__bridge SurfaceView*)nativeView;
-    NSView* peerView = (NSView*)peer->getNativeHandle();
-    
-    // Find this component's top-left position relative to the peer component
-    auto topLeftInPeer = peer->getComponent().getLocalPoint(this, juce::Point<int>(0, 0));
-    
-    CGFloat peerHeight = peerView.bounds.size.height;
-    BOOL isFlipped = peerView.isFlipped;
-    
-    NSRect frame;
-    if (isFlipped) {
-        // Flipped: origin at top-left, same as JUCE
-        frame = NSMakeRect(topLeftInPeer.x, topLeftInPeer.y, getWidth(), getHeight());
-    } else {
-        // Not flipped: origin at bottom-left, need to convert
-        CGFloat bottomY = peerHeight - (topLeftInPeer.y + getHeight());
-        frame = NSMakeRect(topLeftInPeer.x, bottomY, getWidth(), getHeight());
-    }
-    
-    if (!NSEqualRects(view.frame, frame))
-        [view setFrame:frame];
-}
-
+    bool isFlipped = peerView.isFlipped;
+#else
+    bool isFlipped = true;
 #endif
+
+    auto topLeftInPeer = peer->getComponent().getLocalPoint(this, juce::Point<int>(0, 0));
+    surfaceView.setFrame(topLeftInPeer.x, topLeftInPeer.y, getWidth(), getHeight(), isFlipped);
+}
 
 int ComposeComponent::getModifiers() const
 {

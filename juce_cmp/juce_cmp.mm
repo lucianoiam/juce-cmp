@@ -9,5 +9,6 @@
 
 // Include all Objective-C++ implementation files
 #include "juce_cmp/Surface.mm"
+#include "juce_cmp/SurfaceView.mm"
 #include "juce_cmp/ComposeProvider.mm"
 #include "juce_cmp/ComposeComponent.mm"
