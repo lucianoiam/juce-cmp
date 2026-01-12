@@ -5,3 +5,4 @@
 
 // Include all C++ implementation files
 #include "juce_cmp/Ipc.cpp"
+#include "juce_cmp/ChildProcess.cpp"

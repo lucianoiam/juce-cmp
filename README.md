@@ -67,9 +67,12 @@ juce_cmp/                     # JUCE module (include in your plugin)
   juce_cmp.cpp                # Unity build (C++ implementations)
   juce_cmp.mm                 # Unity build (Objective-C++ implementations)
   juce_cmp/                   # Implementation files
-    ComposeComponent.h/mm     # JUCE Component displaying Compose UI
-    ComposeProvider.h/mm      # Creates shared surface, manages child process
-    Ipc.h/cpp                 # Bidirectional IPC (ValueTree messages)
+    ComposeComponent.h/mm     # Thin JUCE glue layer (input forwarding)
+    ComposeProvider.h/mm      # Platform-agnostic coordinator
+    Surface.h/mm              # Shared surface (IOSurface on macOS)
+    SurfaceView.h/mm          # Native view for surface display
+    ChildProcess.h/cpp        # Child process lifecycle (fork/exec)
+    Ipc.h/cpp                 # Bidirectional IPC
     InputEvent.h              # Factory functions for input events
     ipc_protocol.h            # IPC protocol - binary events (16 bytes)
     ui_helpers.h              # UI utilities (e.g., hideResizeHandle)
