@@ -101,7 +101,7 @@ void ComposeProvider::resize(int width, int height)
     if (surface_.resize(pixelW, pixelH))
     {
         // Send resize event
-        auto e = InputEventFactory::resize(pixelW, pixelH, scale_, 0);
+        auto e = InputEventFactory::resize(pixelW, pixelH, scale_);
         ipc_.sendInput(e);
 
         // Send new surface ID

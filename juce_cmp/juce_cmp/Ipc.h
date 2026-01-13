@@ -9,6 +9,7 @@
 #include <thread>
 #include <atomic>
 #include "ipc_protocol.h"
+#include "input_event.h"
 
 namespace juce_cmp
 {
