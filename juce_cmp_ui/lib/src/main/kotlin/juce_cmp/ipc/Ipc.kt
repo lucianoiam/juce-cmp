@@ -73,7 +73,7 @@ class Ipc(private val socketFD: Int) {
 
                     when (eventType) {
                         EventType.INPUT -> handleInputEvent()
-                        EventType.GFX -> handleGfxEvent()
+                        EventType.CMP -> handleCmpEvent()
                         EventType.JUCE -> handleJuceEvent()
                     }
                 } catch (e: Exception) {
@@ -133,14 +133,14 @@ class Ipc(private val socketFD: Int) {
         onInputEvent?.invoke(event)
     }
 
-    private fun handleGfxEvent() {
+    private fun handleCmpEvent() {
         val subtype = readByte()
         if (subtype < 0) {
             running = false
             kotlin.system.exitProcess(0)
         }
 
-        // GfxEvent.FIRST_FRAME is UI → Host only
+        // CmpEvent.FIRST_FRAME is UI → Host only
         // IOSurface sharing uses Mach port IPC, not socket events
     }
 
@@ -195,11 +195,11 @@ class Ipc(private val socketFD: Int) {
 
     /**
      * Notify host that first frame has been rendered and surface is ready.
-     * Format: EventType.GFX + GfxEvent.FIRST_FRAME
+     * Format: EventType.CMP + CmpEvent.FIRST_FRAME
      */
     fun sendFirstFrameRendered() {
         synchronized(writeLock) {
-            writeFully(byteArrayOf(EventType.GFX.toByte(), GfxEvent.FIRST_FRAME.toByte()))
+            writeFully(byteArrayOf(EventType.CMP.toByte(), CmpEvent.FIRST_FRAME.toByte()))
         }
     }
 }

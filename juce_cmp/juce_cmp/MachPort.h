@@ -10,7 +10,7 @@ namespace juce_cmp
 {
 
 /**
- * MachPortIPC - Bidirectional Mach port channel for IOSurface sharing.
+ * MachPort - Bidirectional Mach port channel for IOSurface sharing.
  *
  * Uses bootstrap server for initial handshake, then maintains a persistent
  * channel where the parent can push IOSurface Mach ports at any time.
@@ -22,15 +22,15 @@ namespace juce_cmp
  * 4. Parent: sendPort() - pushes IOSurface ports (initial, resize, etc.)
  * 5. Child: receives ports via its receive port
  */
-class MachPortIPC
+class MachPort
 {
 public:
-    MachPortIPC();
-    ~MachPortIPC();
+    MachPort();
+    ~MachPort();
 
     // Non-copyable
-    MachPortIPC(const MachPortIPC&) = delete;
-    MachPortIPC& operator=(const MachPortIPC&) = delete;
+    MachPort(const MachPort&) = delete;
+    MachPort& operator=(const MachPort&) = delete;
 
     /**
      * Server side: Create a receive port and register with bootstrap server.

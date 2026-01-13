@@ -34,7 +34,7 @@ bool ComposeProvider::launch(const std::string& executable, int width, int heigh
 
 #if __APPLE__
     // Set up Mach IPC for surface sharing
-    std::string machService = machPortIPC_.createServer();
+    std::string machService = machPort_.createServer();
     if (machService.empty())
     {
         surface_.release();
@@ -49,7 +49,7 @@ bool ComposeProvider::launch(const std::string& executable, int width, int heigh
     {
         surface_.release();
 #if __APPLE__
-        machPortIPC_.destroyServer();
+        machPort_.destroyServer();
 #endif
         return false;
     }
@@ -72,7 +72,7 @@ bool ComposeProvider::launch(const std::string& executable, int width, int heigh
 #if __APPLE__
     // Wait for client connection and send initial surface in background thread
     machPortThread_ = std::thread([this]() {
-        if (!machPortIPC_.waitForClient())
+        if (!machPort_.waitForClient())
         {
             fprintf(stderr, "Failed to establish Mach channel with child\n");
             return;
@@ -94,7 +94,7 @@ bool ComposeProvider::launch(const std::string& executable, int width, int heigh
 void ComposeProvider::stop()
 {
 #if __APPLE__
-    machPortIPC_.destroyServer();
+    machPort_.destroyServer();
     if (machPortThread_.joinable())
         machPortThread_.join();
 #endif
@@ -164,7 +164,7 @@ void ComposeProvider::sendSurfacePort()
     uint32_t surfacePort = surface_.createMachPort();
     if (surfacePort != 0)
     {
-        machPortIPC_.sendPort(surfacePort);
+        machPort_.sendPort(surfacePort);
         mach_port_deallocate(mach_task_self(), (mach_port_t)surfacePort);
     }
 }

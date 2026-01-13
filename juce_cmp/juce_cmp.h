@@ -35,7 +35,7 @@ namespace juce_cmp
 #include "juce_cmp/ipc_protocol.h"
 #include "juce_cmp/input_event.h"
 #include "juce_cmp/Ipc.h"
-#include "juce_cmp/MachPortIPC.h"
+#include "juce_cmp/MachPort.h"
 #include "juce_cmp/ComposeProvider.h"
 #include "juce_cmp/ComposeComponent.h"
 #include "juce_cmp/ui_helpers.h"

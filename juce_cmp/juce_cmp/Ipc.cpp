@@ -116,8 +116,8 @@ void Ipc::readerLoop()
 
         switch (eventType)
         {
-            case EVENT_TYPE_GFX:
-                handleGfxEvent();
+            case EVENT_TYPE_CMP:
+                handleCmpEvent();
                 break;
             case EVENT_TYPE_JUCE:
                 handleJuceEvent();
@@ -128,13 +128,13 @@ void Ipc::readerLoop()
     }
 }
 
-void Ipc::handleGfxEvent()
+void Ipc::handleCmpEvent()
 {
     uint8_t subtype = 0;
     if (readFully(&subtype, 1) != 1)
         return;
 
-    if (subtype == GFX_EVENT_FIRST_FRAME && onFirstFrame)
+    if (subtype == CMP_EVENT_FIRST_FRAME && onFirstFrame)
     {
         juce::MessageManager::callAsync([this]() {
             if (onFirstFrame)

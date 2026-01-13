@@ -67,7 +67,7 @@ extern "C" {
  *
  *   RESIZE: x, y = new size (pixels)
  *           data1 = scale factor * 100 (e.g., 200 = 2.0x)
- *           (surface ID sent separately via GFX_EVENT_SURFACE_ID)
+ *           (IOSurface sent separately via Mach port channel)
  */
 #pragma pack(push, 1)
 typedef struct {

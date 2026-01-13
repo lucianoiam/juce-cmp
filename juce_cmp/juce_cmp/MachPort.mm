@@ -1,7 +1,7 @@
 // SPDX-FileCopyrightText: 2026 Luciano Iam <oss@lucianoiam.com>
 // SPDX-License-Identifier: MIT
 
-#include "MachPortIPC.h"
+#include "MachPort.h"
 
 #if __APPLE__
 #include <mach/mach.h>
@@ -13,14 +13,14 @@
 namespace juce_cmp
 {
 
-MachPortIPC::MachPortIPC() = default;
+MachPort::MachPort() = default;
 
-MachPortIPC::~MachPortIPC()
+MachPort::~MachPort()
 {
     destroyServer();
 }
 
-std::string MachPortIPC::createServer()
+std::string MachPort::createServer()
 {
 #if __APPLE__
     // Generate unique service name using PID
@@ -46,7 +46,7 @@ std::string MachPortIPC::createServer()
 #endif
 }
 
-bool MachPortIPC::waitForClient()
+bool MachPort::waitForClient()
 {
 #if __APPLE__
     if (serverPort_ == 0)
@@ -87,7 +87,7 @@ bool MachPortIPC::waitForClient()
 #endif
 }
 
-bool MachPortIPC::sendPort(uint32_t machPort)
+bool MachPort::sendPort(uint32_t machPort)
 {
 #if __APPLE__
     if (clientPort_ == 0)
@@ -139,7 +139,7 @@ bool MachPortIPC::sendPort(uint32_t machPort)
 #endif
 }
 
-void MachPortIPC::destroyServer()
+void MachPort::destroyServer()
 {
 #if __APPLE__
     if (clientPort_ != 0)

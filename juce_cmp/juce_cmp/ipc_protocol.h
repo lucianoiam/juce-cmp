@@ -19,20 +19,20 @@ extern "C" {
 /*
  * Event types (first byte of every message)
  */
-#define EVENT_TYPE_GFX              0
-#define EVENT_TYPE_INPUT            1
+#define EVENT_TYPE_INPUT            0
+#define EVENT_TYPE_CMP              1
 #define EVENT_TYPE_JUCE             2
 
 /*
- * GFX event types (second byte for EVENT_TYPE_GFX)
+ * CMP event types (second byte for EVENT_TYPE_CMP)
  */
-#define GFX_EVENT_FIRST_FRAME       0  /* UI→Host: surface ready to display */
+#define CMP_EVENT_FIRST_FRAME       0  /* UI→Host: surface ready to display */
 
 /**
- * GFX event payload - 1 byte subtype, follows EVENT_TYPE_GFX prefix.
- *   GFX_EVENT_FIRST_FRAME: Surface ready to display (no additional data)
+ * CMP event payload - 1 byte subtype, follows EVENT_TYPE_CMP prefix.
+ *   CMP_EVENT_FIRST_FRAME: Surface ready to display (no additional data)
  *
- * Note: IOSurface sharing uses Mach port IPC (see MachPortIPC.h), not socket.
+ * Note: IOSurface sharing uses Mach port IPC (see MachPort.h), not socket.
  *
  * INPUT event payload - see InputEvent.h
  *

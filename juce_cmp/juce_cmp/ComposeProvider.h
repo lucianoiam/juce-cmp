@@ -7,7 +7,7 @@
 #include "Surface.h"
 #include "SurfaceView.h"
 #include "Ipc.h"
-#include "MachPortIPC.h"
+#include "MachPort.h"
 #include <juce_core/juce_core.h>
 #include <juce_data_structures/juce_data_structures.h>
 #include <cstdint>
@@ -67,7 +67,7 @@ private:
     ChildProcess child_;
     Ipc ipc_;
 #if __APPLE__
-    MachPortIPC machPortIPC_;
+    MachPort machPort_;
     std::thread machPortThread_;
 #endif
 

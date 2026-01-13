@@ -12,13 +12,13 @@ package juce_cmp.ipc
 
 // Event types (first byte of every message)
 object EventType {
-    const val GFX = 0
-    const val INPUT = 1
+    const val INPUT = 0
+    const val CMP = 1
     const val JUCE = 2
 }
 
-// GFX event types (second byte for EventType.GFX)
+// CMP event types (second byte for EventType.CMP)
 // Note: IOSurface sharing uses Mach port IPC, not socket
-object GfxEvent {
+object CmpEvent {
     const val FIRST_FRAME = 0   // UI→Host: surface ready to display
 }

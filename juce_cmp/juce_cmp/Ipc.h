@@ -23,7 +23,7 @@ namespace juce_cmp
  * - TX (host → UI): Input events, resize, focus, ValueTree messages
  * - RX (UI → host): First frame notification, ValueTree messages
  *
- * Note: IOSurface sharing uses separate Mach port IPC (see MachPortIPC.h).
+ * Note: IOSurface sharing uses separate Mach port IPC (see MachPort.h).
  *
  * Protocol: 1-byte event type followed by type-specific payload.
  * See ipc_protocol.h for details.
@@ -55,7 +55,7 @@ private:
 
     // RX thread methods
     void readerLoop();
-    void handleGfxEvent();
+    void handleCmpEvent();
     void handleJuceEvent();
     ssize_t readFully(void* buffer, size_t size);
 
