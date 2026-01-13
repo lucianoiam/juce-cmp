@@ -16,8 +16,10 @@ namespace juce_cmp
 /**
  * Ipc - Bidirectional IPC channel between host and UI process.
  *
+ * Uses a Unix socket for bidirectional communication.
+ *
  * Handles both directions:
- * - TX (host → UI): Input events, resize, focus, ValueTree messages
+ * - TX (host → UI): Input events, resize, focus, ValueTree messages, surface IDs
  * - RX (UI → host): First frame notification, ValueTree messages
  *
  * Protocol: 1-byte event type followed by type-specific payload.
@@ -33,19 +35,19 @@ public:
     ~Ipc();
 
     // Configuration
-    void setWriteFD(int fd);
-    void setReadFD(int fd);
+    void setSocketFD(int fd);
     void setEventHandler(EventHandler handler) { onEvent = std::move(handler); }
     void setFirstFrameHandler(FirstFrameHandler handler) { onFirstFrame = std::move(handler); }
 
     // Lifecycle
     void startReceiving();
     void stop();
-    bool isValid() const { return writeFD >= 0; }
+    bool isValid() const { return socketFD >= 0; }
 
     // TX: Host → UI
     void sendInput(InputEvent& event);
     void sendEvent(const juce::ValueTree& tree);
+    void sendSurfaceID(uint32_t surfaceID);
 
 private:
 
@@ -55,9 +57,8 @@ private:
     void handleJuceEvent();
     ssize_t readFully(void* buffer, size_t size);
 
-    // File descriptors
-    int writeFD = -1;  // stdin of child (host → UI)
-    int readFD = -1;   // stdout of child (UI → host)
+    // Socket file descriptor (bidirectional)
+    int socketFD = -1;
 
     // RX state
     std::atomic<bool> running { false };

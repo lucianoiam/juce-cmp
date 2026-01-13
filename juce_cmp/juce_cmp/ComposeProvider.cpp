@@ -3,6 +3,10 @@
 
 #include "ComposeProvider.h"
 
+#if __APPLE__ || __linux__
+#include <unistd.h>
+#endif
+
 namespace juce_cmp
 {
 
@@ -24,16 +28,15 @@ bool ComposeProvider::launch(const std::string& executable, int width, int heigh
     if (!surface_.create(pixelW, pixelH))
         return false;
 
-    // Launch child process
-    if (!child_.launch(executable, surface_.getID(), scale))
+    // Launch child process (no surface ID - we'll send FD via socket)
+    if (!child_.launch(executable, scale))
     {
         surface_.release();
         return false;
     }
 
-    // Set up IPC
-    ipc_.setWriteFD(child_.getStdinPipeFD());
-    ipc_.setReadFD(child_.getStdoutPipeFD());
+    // Set up IPC on socket
+    ipc_.setSocketFD(child_.getSocketFD());
 
     ipc_.setEventHandler([this](const juce::ValueTree& tree) {
         if (eventCallback_)
@@ -46,6 +49,9 @@ bool ComposeProvider::launch(const std::string& executable, int width, int heigh
     });
 
     ipc_.startReceiving();
+
+    // Send surface ID to child
+    ipc_.sendSurfaceID(surface_.getID());
 
     // Set up view
     view_.create();
@@ -92,11 +98,15 @@ void ComposeProvider::resize(int width, int height)
     int pixelW = (int)(width * scale_);
     int pixelH = (int)(height * scale_);
 
-    uint32_t newSurfaceID = surface_.resize(pixelW, pixelH);
-    if (newSurfaceID != 0)
+    if (surface_.resize(pixelW, pixelH))
     {
-        auto e = InputEventFactory::resize(pixelW, pixelH, scale_, newSurfaceID);
+        // Send resize event
+        auto e = InputEventFactory::resize(pixelW, pixelH, scale_, 0);
         ipc_.sendInput(e);
+
+        // Send new surface ID
+        ipc_.sendSurfaceID(surface_.getID());
+
         view_.setPendingSurface(surface_.getNativeHandle());
     }
 }

@@ -5,10 +5,7 @@
  * IPC Protocol - Binary event forwarding between host and UI processes.
  *
  * Format: 1-byte event type followed by type-specific payload.
- *
- * Directions:
- *   Host → UI: stdin pipe
- *   UI → Host: stdout pipe
+ * Uses a Unix socket pair for bidirectional communication.
  */
 #ifndef IPC_PROTOCOL_H
 #define IPC_PROTOCOL_H
@@ -25,6 +22,7 @@ extern "C" {
 #define EVENT_TYPE_INPUT            0
 #define EVENT_TYPE_CMP              1
 #define EVENT_TYPE_JUCE             2
+#define EVENT_TYPE_SURFACE_ID       3  /* 4-byte IOSurface ID follows */
 
 /*
  * CMP event subtypes (second byte for EVENT_TYPE_CMP)
@@ -81,7 +79,7 @@ extern "C" {
  *
  *   RESIZE: x, y = new size (pixels)
  *           data1 = scale factor * 100 (e.g., 200 = 2.0x)
- *           timestamp = new IOSurface ID
+ *           (surface ID sent separately via EVENT_TYPE_SURFACE_ID)
  */
 #pragma pack(push, 1)
 typedef struct {

@@ -8,6 +8,7 @@
 #include <signal.h>
 #include <sys/wait.h>
 #include <sys/stat.h>
+#include <sys/socket.h>
 #endif
 
 namespace juce_cmp
@@ -21,7 +22,6 @@ ChildProcess::~ChildProcess()
 }
 
 bool ChildProcess::launch(const std::string& executable,
-                          uint32_t surfaceID,
                           float scale,
                           const std::string& workingDir)
 {
@@ -31,42 +31,29 @@ bool ChildProcess::launch(const std::string& executable,
     if (stat(executable.c_str(), &st) != 0)
         return false;
 
-    std::string surfaceArg = "--iosurface-id=" + std::to_string(surfaceID);
     std::string scaleArg = "--scale=" + std::to_string(scale);
 
-    // Create pipe for stdin (host -> child)
-    int stdinPipes[2];
-    if (pipe(stdinPipes) != 0)
+    // Create Unix socket pair for bidirectional IPC
+    int sockets[2];
+    if (socketpair(AF_UNIX, SOCK_STREAM, 0, sockets) != 0)
         return false;
-
-    // Create pipe for stdout (child -> host)
-    int stdoutPipes[2];
-    if (pipe(stdoutPipes) != 0)
-    {
-        close(stdinPipes[0]);
-        close(stdinPipes[1]);
-        return false;
-    }
 
     childPid_ = fork();
 
     if (childPid_ == 0)
     {
         // Child process
-        close(stdinPipes[1]);   // Close write end of stdin pipe
-        close(stdoutPipes[0]);  // Close read end of stdout pipe
+        close(sockets[0]);  // Close parent's end
 
-        dup2(stdinPipes[0], STDIN_FILENO);   // Redirect stdin
-        dup2(stdoutPipes[1], STDOUT_FILENO); // Redirect stdout
-        close(stdinPipes[0]);
-        close(stdoutPipes[1]);
+        // Pass socket FD as argument
+        std::string socketArg = "--socket-fd=" + std::to_string(sockets[1]);
 
         if (!workingDir.empty())
             chdir(workingDir.c_str());
 
         execl(executable.c_str(),
               executable.c_str(),
-              surfaceArg.c_str(),
+              socketArg.c_str(),
               scaleArg.c_str(),
               nullptr);
 
@@ -76,26 +63,20 @@ bool ChildProcess::launch(const std::string& executable,
     else if (childPid_ > 0)
     {
         // Parent process
-        close(stdinPipes[0]);   // Close read end of stdin pipe
-        close(stdoutPipes[1]);  // Close write end of stdout pipe
-
-        stdinPipeFD_ = stdinPipes[1];
-        stdoutPipeFD_ = stdoutPipes[0];
+        close(sockets[1]);  // Close child's end
+        socketFD_ = sockets[0];
 
         return true;
     }
     else
     {
         // Fork failed
-        close(stdinPipes[0]);
-        close(stdinPipes[1]);
-        close(stdoutPipes[0]);
-        close(stdoutPipes[1]);
+        close(sockets[0]);
+        close(sockets[1]);
         return false;
     }
 #else
     (void)executable;
-    (void)surfaceID;
     (void)scale;
     (void)workingDir;
     return false;
@@ -105,11 +86,11 @@ bool ChildProcess::launch(const std::string& executable,
 void ChildProcess::stop()
 {
 #if __APPLE__ || __linux__
-    // Close stdin pipe first - signals EOF to child
-    if (stdinPipeFD_ >= 0)
+    // Close socket first - signals EOF to child
+    if (socketFD_ >= 0)
     {
-        close(stdinPipeFD_);
-        stdinPipeFD_ = -1;
+        close(socketFD_);
+        socketFD_ = -1;
     }
 
     // Wait for child to exit with timeout, then force kill
@@ -136,13 +117,6 @@ void ChildProcess::stop()
             childPid_ = 0;
         }
     }
-
-    // Close stdout pipe after child has exited
-    if (stdoutPipeFD_ >= 0)
-    {
-        close(stdoutPipeFD_);
-        stdoutPipeFD_ = -1;
-    }
 #endif
 }
 
@@ -157,14 +131,9 @@ bool ChildProcess::isRunning() const
 #endif
 }
 
-int ChildProcess::getStdinPipeFD() const
+int ChildProcess::getSocketFD() const
 {
-    return stdinPipeFD_;
-}
-
-int ChildProcess::getStdoutPipeFD() const
-{
-    return stdoutPipeFD_;
+    return socketFD_;
 }
 
 }  // namespace juce_cmp

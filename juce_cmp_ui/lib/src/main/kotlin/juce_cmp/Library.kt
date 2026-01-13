@@ -8,7 +8,6 @@ import juce_cmp.ipc.Ipc
 import juce_cmp.ipc.JuceValueTree
 import juce_cmp.renderer.runIOSurfaceRenderer
 import java.io.FileDescriptor
-import java.io.FileInputStream
 import java.io.FileOutputStream
 import java.io.PrintStream
 
@@ -16,11 +15,11 @@ import java.io.PrintStream
  * Main entry point for the juce_cmp library.
  *
  * Client applications MUST call init() as the very first thing in main(),
- * before any other code runs. This sets up stdout capture for binary IPC.
+ * before any other code runs. This sets up the socket-based IPC channel.
  */
 object Library {
     private var initialized = false
-    private var surfaceID: Int? = null
+    private var socketFD: Int? = null
     private var scaleFactor: Float = 1f
     private var ipc: Ipc? = null
 
@@ -28,7 +27,7 @@ object Library {
      * Whether the application was launched by a host.
      */
     val hasHost: Boolean
-        get() = surfaceID != null
+        get() = socketFD != null
 
     /**
      * Send a JuceValueTree event to the host.
@@ -45,7 +44,7 @@ object Library {
      *
      * This performs critical setup:
      * - Parses command-line arguments for embedded mode detection
-     * - Captures raw stdout (fd 1) for binary IPC with the host
+     * - Sets up socket-based IPC with the host
      * - Redirects System.out to stderr so library noise doesn't corrupt the protocol
      *
      * @param args Command-line arguments from main()
@@ -54,16 +53,16 @@ object Library {
         if (initialized) return
         initialized = true
 
-        // Parse --iosurface-id=<id> to detect embedded mode
-        val iosurfaceArg = args.firstOrNull { it.startsWith("--iosurface-id=") }
-        if (iosurfaceArg != null) {
+        // Parse --socket-fd=<fd> to detect embedded mode
+        val socketArg = args.firstOrNull { it.startsWith("--socket-fd=") }
+        if (socketArg != null) {
             // Hide from Dock - we're a background renderer for the host
             System.setProperty("apple.awt.UIElement", "true")
 
-            surfaceID = iosurfaceArg
+            socketFD = socketArg
                 .substringAfter("=")
                 .toIntOrNull()
-                ?: error("Invalid --iosurface-id value")
+                ?: error("Invalid --socket-fd value")
 
             // Parse --scale=<factor> for Retina support (e.g., 2.0)
             scaleFactor = args
@@ -71,18 +70,13 @@ object Library {
                 ?.substringAfter("=")
                 ?.toFloatOrNull()
                 ?: 1f
+
+            // Create IPC channel on the inherited socket FD
+            ipc = Ipc(socketFD!!)
+
+            // Redirect System.out to stderr so library noise doesn't corrupt our protocol
+            System.setOut(PrintStream(FileOutputStream(FileDescriptor.err), true))
         }
-
-        // Capture the raw stdin/stdout before anyone else can pollute them
-        // FileDescriptor.in/out are the JVM's references to fd 0/1
-        ipc = Ipc(
-            input = FileInputStream(FileDescriptor.`in`),
-            output = FileOutputStream(FileDescriptor.out)
-        )
-
-        // Redirect System.out to stderr so library noise doesn't corrupt our protocol
-        // All println(), library warnings, etc. will now go to stderr
-        System.setOut(PrintStream(FileOutputStream(FileDescriptor.err), true))
     }
 
     /**
@@ -100,11 +94,11 @@ object Library {
         onFrameRendered: ((frameNumber: Long, surface: org.jetbrains.skia.Surface) -> Unit)? = null,
         content: @Composable () -> Unit
     ) {
-        val id = surfaceID ?: error("host() called but not in embedded mode")
+        val fd = socketFD ?: error("host() called but not in embedded mode")
         val channel = ipc ?: error("host() called but IPC not initialized")
 
         runIOSurfaceRenderer(
-            surfaceID = id,
+            socketFD = fd,
             scaleFactor = scaleFactor,
             ipc = channel,
             onFrameRendered = onFrameRendered,

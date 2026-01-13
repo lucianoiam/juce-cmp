@@ -26,16 +26,20 @@ bool Surface::create(int width, int height)
     width_ = width;
     height_ = height;
 
-    #pragma clang diagnostic push
-    #pragma clang diagnostic ignored "-Wdeprecated-declarations"
+    // Note: kIOSurfaceIsGlobal is deprecated but required for cross-process
+    // IOSurface lookup via IOSurfaceLookup(). The alternative (XPC or Mach IPC
+    // to pass Mach ports) requires significant architecture changes.
+    // TODO: Migrate to XPC for proper IOSurface sharing.
+#pragma clang diagnostic push
+#pragma clang diagnostic ignored "-Wdeprecated-declarations"
     NSDictionary* props = @{
         (id)kIOSurfaceWidth: @(width),
         (id)kIOSurfaceHeight: @(height),
         (id)kIOSurfaceBytesPerElement: @4,
         (id)kIOSurfacePixelFormat: @((uint32_t)'BGRA'),
-        (id)kIOSurfaceIsGlobal: @YES  // Required for cross-process lookup
+        (id)kIOSurfaceIsGlobal: @YES
     };
-    #pragma clang diagnostic pop
+#pragma clang diagnostic pop
 
     surface_ = IOSurfaceCreate((__bridge CFDictionaryRef)props);
     return surface_ != nullptr;
@@ -46,14 +50,14 @@ bool Surface::create(int width, int height)
 #endif
 }
 
-uint32_t Surface::resize(int width, int height)
+bool Surface::resize(int width, int height)
 {
 #if __APPLE__
     width_ = width;
     height_ = height;
 
-    #pragma clang diagnostic push
-    #pragma clang diagnostic ignored "-Wdeprecated-declarations"
+#pragma clang diagnostic push
+#pragma clang diagnostic ignored "-Wdeprecated-declarations"
     NSDictionary* props = @{
         (id)kIOSurfaceWidth: @(width),
         (id)kIOSurfaceHeight: @(height),
@@ -61,7 +65,7 @@ uint32_t Surface::resize(int width, int height)
         (id)kIOSurfacePixelFormat: @((uint32_t)'BGRA'),
         (id)kIOSurfaceIsGlobal: @YES
     };
-    #pragma clang diagnostic pop
+#pragma clang diagnostic pop
 
     IOSurfaceRef newSurface = IOSurfaceCreate((__bridge CFDictionaryRef)props);
     if (newSurface != nullptr)
@@ -71,13 +75,13 @@ uint32_t Surface::resize(int width, int height)
             CFRelease((IOSurfaceRef)previousSurface_);
         previousSurface_ = surface_;
         surface_ = newSurface;
-        return IOSurfaceGetID((IOSurfaceRef)surface_);
+        return true;
     }
-    return 0;
+    return false;
 #else
     (void)width;
     (void)height;
-    return 0;
+    return false;
 #endif
 }
 
@@ -107,7 +111,9 @@ bool Surface::isValid() const
 uint32_t Surface::getID() const
 {
 #if __APPLE__
-    return surface_ != nullptr ? IOSurfaceGetID((IOSurfaceRef)surface_) : 0;
+    if (surface_ == nullptr)
+        return 0;
+    return IOSurfaceGetID((IOSurfaceRef)surface_);
 #else
     return 0;
 #endif

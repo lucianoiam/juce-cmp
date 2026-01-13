@@ -17,20 +17,15 @@ Ipc::~Ipc()
     stop();
 }
 
-void Ipc::setWriteFD(int fd)
+void Ipc::setSocketFD(int fd)
 {
-    writeFD = fd;
-}
-
-void Ipc::setReadFD(int fd)
-{
-    readFD = fd;
+    socketFD = fd;
 }
 
 void Ipc::startReceiving()
 {
     if (running.load()) return;
-    if (readFD < 0) return;
+    if (socketFD < 0) return;
 
     running.store(true);
     readerThread = std::thread([this]() { readerLoop(); });
@@ -44,15 +39,10 @@ void Ipc::stop()
         readerThread.join();
 
 #if JUCE_MAC || JUCE_LINUX
-    if (writeFD >= 0)
+    if (socketFD >= 0)
     {
-        close(writeFD);
-        writeFD = -1;
-    }
-    if (readFD >= 0)
-    {
-        close(readFD);
-        readFD = -1;
+        close(socketFD);
+        socketFD = -1;
     }
 #endif
 }
@@ -63,26 +53,26 @@ void Ipc::stop()
 
 void Ipc::sendInput(InputEvent& event)
 {
-    if (writeFD < 0) return;
+    if (socketFD < 0) return;
 
 #if JUCE_MAC || JUCE_LINUX
     uint8_t prefix = EVENT_TYPE_INPUT;
-    ssize_t written = write(writeFD, &prefix, 1);
+    ssize_t written = write(socketFD, &prefix, 1);
     if (written != 1)
     {
-        writeFD = -1;
+        socketFD = -1;
         return;
     }
 
-    written = write(writeFD, &event, sizeof(InputEvent));
+    written = write(socketFD, &event, sizeof(InputEvent));
     if (written != sizeof(InputEvent))
-        writeFD = -1;
+        socketFD = -1;
 #endif
 }
 
 void Ipc::sendEvent(const juce::ValueTree& tree)
 {
-    if (writeFD < 0) return;
+    if (socketFD < 0) return;
 
     juce::MemoryOutputStream stream;
     tree.writeToStream(stream);
@@ -92,23 +82,42 @@ void Ipc::sendEvent(const juce::ValueTree& tree)
 
 #if JUCE_MAC || JUCE_LINUX
     uint8_t prefix = EVENT_TYPE_JUCE;
-    ssize_t written = write(writeFD, &prefix, 1);
+    ssize_t written = write(socketFD, &prefix, 1);
     if (written != 1)
     {
-        writeFD = -1;
+        socketFD = -1;
         return;
     }
 
-    written = write(writeFD, &dataSize, 4);
+    written = write(socketFD, &dataSize, 4);
     if (written != 4)
     {
-        writeFD = -1;
+        socketFD = -1;
         return;
     }
 
-    written = write(writeFD, data, dataSize);
+    written = write(socketFD, data, dataSize);
     if (written != static_cast<ssize_t>(dataSize))
-        writeFD = -1;
+        socketFD = -1;
+#endif
+}
+
+void Ipc::sendSurfaceID(uint32_t surfaceID)
+{
+    if (socketFD < 0) return;
+
+#if JUCE_MAC || JUCE_LINUX
+    uint8_t prefix = EVENT_TYPE_SURFACE_ID;
+    ssize_t written = write(socketFD, &prefix, 1);
+    if (written != 1)
+    {
+        socketFD = -1;
+        return;
+    }
+
+    written = write(socketFD, &surfaceID, sizeof(surfaceID));
+    if (written != sizeof(surfaceID))
+        socketFD = -1;
 #endif
 }
 
@@ -183,7 +192,7 @@ ssize_t Ipc::readFully(void* buffer, size_t size)
 
     while (totalRead < size && running.load())
     {
-        ssize_t n = ::read(readFD, ptr + totalRead, size - totalRead);
+        ssize_t n = ::read(socketFD, ptr + totalRead, size - totalRead);
         if (n <= 0) return totalRead > 0 ? static_cast<ssize_t>(totalRead) : n;
         totalRead += static_cast<size_t>(n);
     }

@@ -12,7 +12,7 @@ namespace juce_cmp
 /**
  * ChildProcess - Manages the child UI process lifecycle.
  *
- * Uses fork/exec on POSIX systems with stdin/stdout pipes for IPC.
+ * Uses fork/exec on POSIX systems with a Unix socket pair for IPC.
  * Windows implementation will use CreateProcess (TODO).
  */
 class ChildProcess
@@ -27,7 +27,6 @@ public:
 
     /** Launch the child process with the given executable and arguments. */
     bool launch(const std::string& executable,
-                uint32_t surfaceID,
                 float scale,
                 const std::string& workingDir = "");
 
@@ -37,18 +36,14 @@ public:
     /** Check if child is still running. */
     bool isRunning() const;
 
-    /** Get the stdin pipe file descriptor for sending input to child. */
-    int getStdinPipeFD() const;
-
-    /** Get the stdout pipe file descriptor for reading from child. */
-    int getStdoutPipeFD() const;
+    /** Get the socket file descriptor for IPC with child. */
+    int getSocketFD() const;
 
 private:
 #if __APPLE__ || __linux__
     pid_t childPid_ = 0;
 #endif
-    int stdinPipeFD_ = -1;
-    int stdoutPipeFD_ = -1;
+    int socketFD_ = -1;
 };
 
 }  // namespace juce_cmp

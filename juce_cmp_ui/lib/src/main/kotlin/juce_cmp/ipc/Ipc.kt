@@ -3,57 +3,80 @@
 
 package juce_cmp.ipc
 
-import java.io.InputStream
-import java.io.OutputStream
+import com.sun.jna.Library
+import com.sun.jna.Memory
+import com.sun.jna.Native
+import com.sun.jna.Pointer
 import java.nio.ByteBuffer
 import java.nio.ByteOrder
 import juce_cmp.input.InputEvent
 
 /**
+ * Native library interface for socket I/O operations.
+ */
+private interface SocketLib : Library {
+    fun socketRead(socketFD: Int, buffer: Pointer, length: Long): Long
+    fun socketWrite(socketFD: Int, buffer: Pointer, length: Long): Long
+
+    companion object {
+        val INSTANCE: SocketLib by lazy {
+            val libFile = Native.extractFromResourcePath("iosurface_renderer")
+            Native.load(libFile.absolutePath, SocketLib::class.java)
+        }
+    }
+}
+
+/**
  * Bidirectional IPC channel between UI and host process.
  *
+ * Uses a Unix socket for bidirectional communication via native JNA calls.
  * Protocol: 1-byte event type followed by type-specific payload.
  * See ipc_protocol.h for details.
  *
  * - Receiving runs on a background thread (host → UI)
  * - Sending is synchronous and thread-safe (UI → host)
  */
-class Ipc(
-    private val input: InputStream,
-    private val output: OutputStream
-) {
+class Ipc(private val socketFD: Int) {
     @Volatile
     private var running = false
     private var thread: Thread? = null
     private val writeLock = Any()
 
+    // Reusable buffers for native I/O
+    private val readBuffer = Memory(1024)
+    private val writeBuffer = Memory(1024)
+
     private companion object {
         const val EVENT_TYPE_INPUT = 0
         const val EVENT_TYPE_CMP = 1
         const val EVENT_TYPE_JUCE = 2
+        const val EVENT_TYPE_SURFACE_ID = 3
         const val CMP_SUBTYPE_FIRST_FRAME = 0
     }
 
-    /** Returns true if the receiver is still running (stdin not closed) */
+    /** Returns true if the receiver is still running (socket not closed) */
     val isRunning: Boolean get() = running
 
     // ---- Receiving (Host → UI) ----
 
     private var onInputEvent: ((InputEvent) -> Unit)? = null
+    private var onSurfaceID: ((Int) -> Unit)? = null
     private var onJuceEvent: ((JuceValueTree) -> Unit)? = null
 
     fun startReceiving(
         onInputEvent: (InputEvent) -> Unit,
+        onSurfaceID: ((Int) -> Unit)? = null,
         onJuceEvent: ((JuceValueTree) -> Unit)? = null
     ) {
         if (running) return
         this.onInputEvent = onInputEvent
+        this.onSurfaceID = onSurfaceID
         this.onJuceEvent = onJuceEvent
         running = true
         thread = Thread({
             while (running) {
                 try {
-                    val eventType = input.read()
+                    val eventType = readByte()
                     if (eventType < 0) {
                         running = false
                         kotlin.system.exitProcess(0)
@@ -63,6 +86,7 @@ class Ipc(
                         EVENT_TYPE_INPUT -> handleInputEvent()
                         EVENT_TYPE_CMP -> handleCmpEvent()
                         EVENT_TYPE_JUCE -> handleJuceEvent()
+                        EVENT_TYPE_SURFACE_ID -> handleSurfaceID()
                     }
                 } catch (e: Exception) {
                     // Silently ignore exceptions when running
@@ -79,37 +103,50 @@ class Ipc(
         thread = null
     }
 
-    private fun handleInputEvent() {
-        val buffer = ByteArray(16)
-        var bytesRead = 0
-        while (bytesRead < 16 && running) {
-            val n = input.read(buffer, bytesRead, 16 - bytesRead)
-            if (n < 0) {
-                running = false
-                kotlin.system.exitProcess(0)
+    private fun readByte(): Int {
+        val n = SocketLib.INSTANCE.socketRead(socketFD, readBuffer, 1)
+        if (n <= 0) return -1
+        return readBuffer.getByte(0).toInt() and 0xFF
+    }
+
+    private fun readFully(size: Int): ByteArray? {
+        val data = ByteArray(size)
+        var offset = 0
+        while (offset < size && running) {
+            val toRead = minOf(1024L, (size - offset).toLong())
+            val n = SocketLib.INSTANCE.socketRead(socketFD, readBuffer, toRead)
+            if (n <= 0) return null
+            for (i in 0 until n.toInt()) {
+                data[offset + i] = readBuffer.getByte(i.toLong())
             }
-            bytesRead += n
+            offset += n.toInt()
+        }
+        return if (offset == size) data else null
+    }
+
+    private fun handleInputEvent() {
+        val buffer = readFully(16) ?: run {
+            running = false
+            kotlin.system.exitProcess(0)
         }
 
-        if (bytesRead == 16) {
-            val byteBuffer = ByteBuffer.wrap(buffer).order(ByteOrder.LITTLE_ENDIAN)
-            val event = InputEvent(
-                type = byteBuffer.get().toInt() and 0xFF,
-                action = byteBuffer.get().toInt() and 0xFF,
-                button = byteBuffer.get().toInt() and 0xFF,
-                modifiers = byteBuffer.get().toInt() and 0xFF,
-                x = byteBuffer.short.toInt(),
-                y = byteBuffer.short.toInt(),
-                data1 = byteBuffer.short.toInt(),
-                data2 = byteBuffer.short.toInt(),
-                timestamp = byteBuffer.int.toLong() and 0xFFFFFFFFL
-            )
-            onInputEvent?.invoke(event)
-        }
+        val byteBuffer = ByteBuffer.wrap(buffer).order(ByteOrder.LITTLE_ENDIAN)
+        val event = InputEvent(
+            type = byteBuffer.get().toInt() and 0xFF,
+            action = byteBuffer.get().toInt() and 0xFF,
+            button = byteBuffer.get().toInt() and 0xFF,
+            modifiers = byteBuffer.get().toInt() and 0xFF,
+            x = byteBuffer.short.toInt(),
+            y = byteBuffer.short.toInt(),
+            data1 = byteBuffer.short.toInt(),
+            data2 = byteBuffer.short.toInt(),
+            timestamp = byteBuffer.int.toLong() and 0xFFFFFFFFL
+        )
+        onInputEvent?.invoke(event)
     }
 
     private fun handleCmpEvent() {
-        val subtype = input.read()
+        val subtype = readByte()
         if (subtype < 0) {
             running = false
             kotlin.system.exitProcess(0)
@@ -117,41 +154,48 @@ class Ipc(
         // CMP events are UI → Host only, shouldn't receive them here
     }
 
+    private fun handleSurfaceID() {
+        val buffer = readFully(4) ?: run {
+            running = false
+            kotlin.system.exitProcess(0)
+        }
+
+        val surfaceID = ByteBuffer.wrap(buffer).order(ByteOrder.LITTLE_ENDIAN).int
+        onSurfaceID?.invoke(surfaceID)
+    }
+
     private fun handleJuceEvent() {
-        val sizeBuffer = ByteArray(4)
-        var bytesRead = 0
-        while (bytesRead < 4 && running) {
-            val n = input.read(sizeBuffer, bytesRead, 4 - bytesRead)
-            if (n < 0) {
+        val sizeBuffer = readFully(4) ?: run {
+            running = false
+            kotlin.system.exitProcess(0)
+        }
+
+        val size = ByteBuffer.wrap(sizeBuffer).order(ByteOrder.LITTLE_ENDIAN).int
+        if (size > 0 && onJuceEvent != null) {
+            val payload = readFully(size) ?: run {
                 running = false
                 kotlin.system.exitProcess(0)
             }
-            bytesRead += n
-        }
 
-        if (bytesRead == 4) {
-            val size = ByteBuffer.wrap(sizeBuffer).order(ByteOrder.LITTLE_ENDIAN).int
-            if (size > 0 && onJuceEvent != null) {
-                val payload = ByteArray(size)
-                var payloadRead = 0
-                while (payloadRead < size && running) {
-                    val n = input.read(payload, payloadRead, size - payloadRead)
-                    if (n < 0) {
-                        running = false
-                        kotlin.system.exitProcess(0)
-                    }
-                    payloadRead += n
-                }
-
-                if (payloadRead == size) {
-                    val tree = JuceValueTree.fromByteArray(payload)
-                    onJuceEvent?.invoke(tree)
-                }
-            }
+            val tree = JuceValueTree.fromByteArray(payload)
+            onJuceEvent?.invoke(tree)
         }
     }
 
     // ---- Sending (UI → Host) ----
+
+    private fun writeFully(data: ByteArray) {
+        var offset = 0
+        while (offset < data.size) {
+            val toWrite = minOf(1024, data.size - offset)
+            for (i in 0 until toWrite) {
+                writeBuffer.setByte(i.toLong(), data[offset + i])
+            }
+            val n = SocketLib.INSTANCE.socketWrite(socketFD, writeBuffer, toWrite.toLong())
+            if (n <= 0) return
+            offset += n.toInt()
+        }
+    }
 
     /**
      * Send a JuceValueTree to the host.
@@ -163,10 +207,9 @@ class Ipc(
         sizeBuffer.putInt(treeBytes.size)
 
         synchronized(writeLock) {
-            output.write(EVENT_TYPE_JUCE)
-            output.write(sizeBuffer.array())
-            output.write(treeBytes)
-            output.flush()
+            writeFully(byteArrayOf(EVENT_TYPE_JUCE.toByte()))
+            writeFully(sizeBuffer.array())
+            writeFully(treeBytes)
         }
     }
 
@@ -176,9 +219,7 @@ class Ipc(
      */
     fun sendFirstFrameRendered() {
         synchronized(writeLock) {
-            output.write(EVENT_TYPE_CMP)
-            output.write(CMP_SUBTYPE_FIRST_FRAME)
-            output.flush()
+            writeFully(byteArrayOf(EVENT_TYPE_CMP.toByte(), CMP_SUBTYPE_FIRST_FRAME.toByte()))
         }
     }
 }
