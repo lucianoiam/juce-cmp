@@ -34,35 +34,31 @@ Alpha software.
 
 ## Architecture
 
-The module uses IOSurface for zero-copy GPU rendering, enabling efficient integration between JUCE and Compose Multiplatform.
-
 ```
 ┌─────────────────────────────────────────────────────────┐
 │  JUCE Plugin (uses juce_cmp module)                     │
-│  - ComposeComponent creates shared GPU surface          │
-│  - SurfaceView (NSView) displays via CALayer            │
-│  - CADisplayLink for vsync-synchronized refresh         │
+│  - ComposeComponent creates shared IOSurface            │
+│  - SurfaceView (NSView/CALayer) displays surface        │
 │  - Transparent JUCE component captures input events     │
 │  - Launches Compose UI as child process                 │
 └─────────────────┬───────────────────────────────────────┘
-                  │ Mach port IPC (IOSurface)
-                  │ Socket (input events, messages)
+                  │ Mach port (IOSurface sharing)
+                  │ Unix socket (input, messages)
                   ▼
 ┌─────────────────────────────────────────────────────────┐
-│  UI (Compose Desktop / Skia / Metal)                    │
-│  - Uses juce_cmp_ui library for bridge/renderer code   │
-│  - Renders directly to IOSurface-backed Metal texture   │
+│  Child Process (Compose Desktop / Skia / Metal)         │
+│  - Renders to shared IOSurface via Metal backend        │
 │  - Receives input events, injects into ComposeScene     │
-│  - Sends parameter changes back to host via IPC         │
-│  - Zero CPU pixel copies, invalidation-based rendering  │
+│  - Sends messages back to host via socket               │
+│  - Zero CPU pixel copies                                │
 └─────────────────────────────────────────────────────────┘
 ```
 
-**Rendering:** The plugin creates an IOSurface and shares it with the child via Mach port IPC. The Compose UI uses Skia's Metal backend to render directly to the shared surface—no CPU copies involved. Rendering is invalidation-based: frames are only rendered when the scene changes.
+**Rendering:** The plugin creates an IOSurface and sends it to the child via Mach port. The Compose UI uses Skia's Metal backend to render directly to the shared surface. The host's CALayer displays the surface content.
 
-**Input:** Mouse/keyboard events are captured by the JUCE component and sent to the child via a 16-byte binary protocol over a Unix socket. The UI deserializes and injects them into the Compose scene.
+**Input:** Mouse/keyboard events are captured by the JUCE component and sent to the child via a 16-byte binary protocol over a Unix socket. The child deserializes and injects them into the Compose scene.
 
-**Bidirectional IPC:** Host↔UI uses a single multiplexed Unix socket for all communication: input events, resize notifications, and ValueTree messages. The first byte of each message indicates the event type (input/cmp/juce). The library has no knowledge of parameters—apps interpret ValueTree content.
+**IPC:** A single multiplexed Unix socket handles all communication: input events (host→child), resize notifications (host→child), and ValueTree messages (bidirectional). IOSurface sharing uses a separate Mach port channel.
 
 ## Project Structure
 
@@ -74,16 +70,16 @@ juce_cmp/                     # JUCE module (include in your plugin)
   juce_cmp.cpp                # Unity build (C++ implementations)
   juce_cmp.mm                 # Unity build (Objective-C++ implementations)
   juce_cmp/                   # Implementation files
-    ComposeComponent.h/cpp    # JUCE Component displaying Compose UI (pure C++)
-    ComposeProvider.h/cpp     # Orchestrates embedding (pure C++)
+    ComposeComponent.h/cpp    # JUCE Component displaying Compose UI
+    ComposeProvider.h/cpp     # Orchestrates embedding lifecycle
     ChildProcess.h/cpp        # Child process lifecycle (posix_spawn)
-    Surface.h/mm              # Shared GPU surface (IOSurface on macOS)
-    SurfaceView.h/mm          # Native view for display (NSView/CALayer on macOS)
-    MachPort.h/mm             # Mach port IPC for IOSurface sharing (macOS)
-    Ipc.h/cpp                 # Bidirectional IPC (ValueTree messages)
-    InputEvent.h              # Factory functions for input events
-    ipc_protocol.h            # IPC protocol - binary events (16 bytes)
-    ui_helpers.h              # UI utilities (e.g., hideResizeHandle)
+    Surface.h/mm              # IOSurface management (macOS)
+    SurfaceView.h/mm          # NSView/CALayer for display (macOS)
+    MachPort.h/mm             # Mach port IPC for IOSurface sharing
+    Ipc.h/cpp                 # Bidirectional socket IPC
+    input_event.h             # 16-byte binary input protocol
+    ipc_protocol.h            # IPC protocol constants
+    ui_helpers.h              # UI utilities
 ```
 
 **Usage in your plugin:**
@@ -97,7 +93,7 @@ class MyEditor : public juce::AudioProcessorEditor {
     MyEditor(AudioProcessor& p) : AudioProcessorEditor(p) {
         addAndMakeVisible(composeComponent);
 
-        // Handle events from UI (app interprets ValueTree content)
+        // Handle messages from UI (app interprets ValueTree content)
         composeComponent.onEvent([&](const juce::ValueTree& tree) {
             if (tree.getType() == juce::Identifier("param")) {
                 auto paramId = (int)tree.getProperty("id");
@@ -106,7 +102,7 @@ class MyEditor : public juce::AudioProcessorEditor {
             }
         });
 
-        // Send event to UI
+        // Send message to UI
         juce::ValueTree tree("param");
         tree.setProperty("id", 0, nullptr);
         tree.setProperty("value", 0.5, nullptr);
@@ -130,20 +126,18 @@ juce_cmp_ui/                  # Kotlin Multiplatform library
     build.gradle.kts          # Library build config
     src/jvmMain/
       kotlin/juce_cmp/
-        Library.kt            # Library initialization (must call init() first)
+        Library.kt            # Library initialization
         ipc/
-          Ipc.kt              # Bidirectional IPC channel
-          JuceValueTree.kt    # JUCE-compatible ValueTree implementation
+          Ipc.kt              # Socket IPC channel
+          JuceValueTree.kt    # JUCE-compatible ValueTree
         input/
-          InputDispatcher.kt   # Injects events into ComposeScene
-          InputMapper.kt       # Maps protocol events to Compose
-          InputEvent.kt        # Event data classes
+          InputDispatcher.kt  # Injects events into ComposeScene
+          InputMapper.kt      # Maps key codes to Compose
+          InputEvent.kt       # Event data classes
         renderer/
-          IOSurfaceRenderer.kt # Zero-copy Metal rendering
+          IOSurfaceRenderer.kt # Metal rendering to IOSurface
       cpp/
-        iosurface_renderer.m   # Native Metal bridge for Skia
-      resources/
-        libiosurface_renderer.dylib  # Built native library
+        iosurface_renderer.m  # Native Metal/Mach bridge
 ```
 
 **Usage in your Compose app:**
@@ -184,89 +178,46 @@ demo/                         # Example plugin using juce_cmp
   PluginProcessor.h/cpp       # Simple synth processor
   PluginEditor.h/cpp          # Editor using ComposeComponent
   ui/                         # Demo Compose UI application
-    composeApp/
-      src/jvmMain/kotlin/juce_cmp/demo/
-        main.kt               # Entry point
-        App.kt                # Demo Compose UI
-        Knob.kt               # Example rotary knob widget
   scripts/                    # Build and run scripts
-    build.sh                  # Build everything
-    run_standalone.sh         # Run standalone app
-    install_plugin.sh         # Install AU plugin
-    run_only_ui_with_hot_reload.sh  # Hot reload for UI development
   CMakeLists.txt              # Builds demo plugin
 ```
 
-## Build
+## IPC Protocol
 
-```bash
-./demo/scripts/build.sh
-```
+### Socket Messages
 
-This builds:
-1. **Native Metal renderer** (`libiosurface_renderer.dylib`)
-2. **juce_cmp_ui library** (Compose Multiplatform library)
-3. **Demo Compose UI** (`cmpui.app` with bundled JRE)
-4. **Demo AU plugin** (`juce-cmp-demo.component`)
-5. **Demo Standalone** (`juce-cmp-demo.app`)
+All messages have a 1-byte type prefix:
 
-## Install Demo Plugin
+| Type | Value | Direction | Content |
+|------|-------|-----------|---------|
+| INPUT | 0x00 | Host→Child | 16-byte input event |
+| CMP | 0x01 | Child→Host | 1-byte subtype (SURFACE_READY=0) |
+| JUCE | 0x02 | Bidirectional | 4-byte size + ValueTree data |
 
-```bash
-./demo/scripts/install_plugin.sh
-```
+### Input Event (16 bytes)
 
-Copies demo AU to `~/Library/Audio/Plug-Ins/Components/` and resets the audio component cache.
+| Offset | Size | Field | Description |
+|--------|------|-------|-------------|
+| 0 | 1 | type | 0=mouse, 1=key, 2=focus, 3=resize |
+| 1 | 1 | action | 0=press, 1=release, 2=move, 3=scroll |
+| 2 | 1 | button | 1=left, 2=right, 3=middle |
+| 3 | 1 | modifiers | 1=shift, 2=ctrl, 4=alt, 8=meta |
+| 4 | 2 | x | Mouse X, key code, or width |
+| 6 | 2 | y | Mouse Y or height |
+| 8 | 2 | data1 | Scroll delta X (×10000) or codepoint low |
+| 10 | 2 | data2 | Scroll delta Y (×10000) or codepoint high |
+| 12 | 4 | timestamp | Milliseconds since process start |
 
-To validate: `auval -v aumu JCMs JCMm`
+### ValueTree Messages
+
+Binary format compatible with JUCE's `ValueTree::writeToStream()`. The library passes ValueTree blobs opaquely—apps define their own schema.
 
 ## Command-Line Flags
 
-The UI app supports these flags when launched by the plugin:
-- `--mach-service=<name>` - Mach service name for IOSurface sharing (implies embedded mode)
+The UI app accepts these flags when launched by the plugin:
 - `--socket-fd=<fd>` - Unix socket file descriptor for IPC
-- `--scale=<factor>` - Backing scale factor (e.g., 2.0 for Retina)
-
-## IPC Protocol
-
-Events are 16-byte binary structs sent over the Unix socket (see `juce_cmp/juce_cmp/ipc_protocol.h`):
-
-| Offset | Size | Field      | Description                           |
-|--------|------|------------|---------------------------------------|
-| 0      | 1    | type       | 0=input, 1=cmp, 2=juce |
-| 1      | 1    | action     | 1=press, 2=release, 3=move, 4=scroll  |
-| 2      | 1    | button     | Mouse button (1=left, 2=right, 3=mid) |
-| 3      | 1    | modifiers  | Bitmask: 1=shift, 2=ctrl, 4=alt, 8=meta |
-| 4      | 2    | x          | Mouse X or key code                   |
-| 6      | 2    | y          | Mouse Y                               |
-| 8      | 2    | data1      | Scroll delta X (*10000) or codepoint  |
-| 10     | 2    | data2      | Scroll delta Y (*10000)               |
-| 12     | 4    | timestamp  | Milliseconds since process start      |
-
-## Bidirectional ValueTree Protocol
-
-**UI→Host (socket):**
-- `size` (uint32_t, little-endian) - ValueTree data size in bytes
-- `data` (N bytes) - ValueTree binary serialization (JUCE-compatible)
-
-**Host→UI (socket event of type JUCE):**
-- 1-byte type prefix (`EVENT_TYPE_JUCE=2`)
-- 4-byte size (little-endian) + ValueTree binary data
-
-**Example (app-level interpretation as parameter):**
-```kotlin
-// UI→Host
-val tree = JuceValueTree("param")  // import juce_cmp.ipc.JuceValueTree
-tree["id"] = paramId               // Int
-tree["value"] = value              // Double
-Library.send(tree)
-
-// Host→UI (in onEvent callback)
-if (tree.type == "param") {
-    val id = tree["id"].toInt()
-    val value = tree["value"].toDouble().toFloat()
-}
-```
+- `--mach-service=<name>` - Mach service name for IOSurface sharing
+- `--scale=<factor>` - Display scale factor (e.g., 2.0 for Retina)
 
 ## Platform Support
 
@@ -275,8 +226,6 @@ if (tree.type == "param") {
 **Planned:**
 - Windows (DXGI shared textures)
 - Linux (shared memory or Vulkan external memory)
-
-See [TODO](TODO) for roadmap.
 
 ## License
 
