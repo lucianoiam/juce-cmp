@@ -20,8 +20,10 @@ namespace juce_cmp
  * Uses a Unix socket for bidirectional communication.
  *
  * Handles both directions:
- * - TX (host → UI): Input events, resize, focus, ValueTree messages, surface IDs
+ * - TX (host → UI): Input events, resize, focus, ValueTree messages
  * - RX (UI → host): First frame notification, ValueTree messages
+ *
+ * Note: IOSurface sharing uses separate Mach port IPC (see MachPortIPC.h).
  *
  * Protocol: 1-byte event type followed by type-specific payload.
  * See ipc_protocol.h for details.
@@ -48,7 +50,6 @@ public:
     // TX: Host → UI
     void sendInput(InputEvent& event);
     void sendEvent(const juce::ValueTree& tree);
-    void sendSurfaceID(uint32_t surfaceID);
 
 private:
 

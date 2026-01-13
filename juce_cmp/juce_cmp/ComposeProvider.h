@@ -58,6 +58,10 @@ public:
     float getScale() const { return scale_; }
 
 private:
+#if __APPLE__
+    void sendSurfacePort();
+#endif
+
     Surface surface_;
     SurfaceView view_;
     ChildProcess child_;

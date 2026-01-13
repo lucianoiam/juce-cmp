@@ -29,6 +29,12 @@ typedef struct {
     id<MTLCommandQueue> commandQueue;
 } MetalContext;
 
+// Mach port channel for receiving IOSurface ports from parent
+typedef struct {
+    mach_port_t receivePort;  // Our receive port
+    int connected;            // Whether channel is established
+} MachChannel;
+
 // Create Metal context for GPU operations
 void* createMetalContext(void) {
     @autoreleasepool {
@@ -82,61 +88,6 @@ void* getMetalQueue(void* context) {
     return (__bridge void*)ctx->commandQueue;
 }
 
-// Create an IOSurface-backed Metal texture for Skia's BackendRenderTarget.makeMetal()
-// Returns the MTLTexture pointer that can be used with BackendRenderTarget.makeMetal()
-void* createIOSurfaceTexture(void* context, int surfaceID, int* outWidth, int* outHeight) {
-    if (context == NULL) return NULL;
-
-    @autoreleasepool {
-        MetalContext* ctx = (MetalContext*)context;
-
-        // Lookup IOSurface by global ID
-        IOSurfaceRef surface = IOSurfaceLookup((IOSurfaceID)surfaceID);
-        if (surface == NULL) {
-            return NULL;
-        }
-
-        size_t width = IOSurfaceGetWidth(surface);
-        size_t height = IOSurfaceGetHeight(surface);
-
-        if (outWidth) *outWidth = (int)width;
-        if (outHeight) *outHeight = (int)height;
-
-        // Create texture descriptor for IOSurface-backed texture
-        MTLTextureDescriptor* textureDescriptor = [[MTLTextureDescriptor alloc] init];
-        textureDescriptor.width = width;
-        textureDescriptor.height = height;
-        textureDescriptor.pixelFormat = MTLPixelFormatBGRA8Unorm;
-        textureDescriptor.usage = MTLTextureUsageRenderTarget | MTLTextureUsageShaderRead;
-        textureDescriptor.storageMode = MTLStorageModeShared;
-
-        // Create texture backed by the IOSurface - this is the zero-copy magic!
-        id<MTLTexture> texture = [ctx->device newTextureWithDescriptor:textureDescriptor
-                                                             iosurface:surface
-                                                                 plane:0];
-        CFRelease(surface);
-
-        if (texture == nil) {
-            return NULL;
-        }
-
-        // Retain the texture so it survives autorelease
-        CFRetain((__bridge CFTypeRef)texture);
-
-        return (__bridge void*)texture;
-    }
-}
-
-// Release an IOSurface-backed texture
-void releaseIOSurfaceTexture(void* texturePtr) {
-    if (texturePtr == NULL) return;
-
-    @autoreleasepool {
-        id<MTLTexture> texture = (__bridge id<MTLTexture>)texturePtr;
-        CFRelease((__bridge CFTypeRef)texture);
-    }
-}
-
 // Flush pending GPU work (call after Skia renders)
 void flushAndSync(void* context) {
     if (context == NULL) return;
@@ -163,12 +114,11 @@ ssize_t socketWrite(int socketFD, const void* buffer, size_t length) {
     return write(socketFD, buffer, length);
 }
 
-// Request IOSurface Mach port from parent via bootstrap server
-// serviceName: The service name registered by the parent (passed as command line arg)
-// Returns: IOSurfaceRef (caller must CFRelease) or NULL on failure
-IOSurfaceRef requestIOSurfaceFromMachService(const char* serviceName) {
+// Connect to parent's Mach service and establish bidirectional channel
+// Returns opaque channel handle or NULL on failure
+void* machChannelConnect(const char* serviceName) {
     if (serviceName == NULL || serviceName[0] == '\0') {
-        fprintf(stderr, "No Mach service name provided\n");
+        fprintf(stderr, "machChannelConnect: no service name provided\n");
         return NULL;
     }
 
@@ -183,102 +133,135 @@ IOSurfaceRef requestIOSurfaceFromMachService(const char* serviceName) {
 
     fprintf(stderr, "Connected to Mach service: %s\n", serviceName);
 
-    // Create a reply port for receiving the IOSurface port
-    mach_port_t replyPort;
-    kr = mach_port_allocate(mach_task_self(), MACH_PORT_RIGHT_RECEIVE, &replyPort);
+    // Create our receive port for incoming surface ports
+    mach_port_t receivePort;
+    kr = mach_port_allocate(mach_task_self(), MACH_PORT_RIGHT_RECEIVE, &receivePort);
     if (kr != KERN_SUCCESS) {
         fprintf(stderr, "mach_port_allocate failed: %d\n", kr);
         mach_port_deallocate(mach_task_self(), serverPort);
         return NULL;
     }
 
-    // Send request to server
+    // Add send right so parent can send to us
+    kr = mach_port_insert_right(mach_task_self(), receivePort, receivePort, MACH_MSG_TYPE_MAKE_SEND);
+    if (kr != KERN_SUCCESS) {
+        fprintf(stderr, "mach_port_insert_right failed: %d\n", kr);
+        mach_port_deallocate(mach_task_self(), receivePort);
+        mach_port_deallocate(mach_task_self(), serverPort);
+        return NULL;
+    }
+
+    // Send our receive port to parent (as a send right)
     struct {
         mach_msg_header_t header;
-    } requestMsg = {};
+        mach_msg_body_t body;
+        mach_msg_port_descriptor_t portDescriptor;
+    } connectMsg = {};
 
-    requestMsg.header.msgh_bits = MACH_MSGH_BITS(MACH_MSG_TYPE_COPY_SEND, MACH_MSG_TYPE_MAKE_SEND_ONCE);
-    requestMsg.header.msgh_size = sizeof(requestMsg);
-    requestMsg.header.msgh_remote_port = serverPort;
-    requestMsg.header.msgh_local_port = replyPort;
-    requestMsg.header.msgh_id = 1;  // Request ID
+    connectMsg.header.msgh_bits = MACH_MSGH_BITS_COMPLEX | MACH_MSGH_BITS(MACH_MSG_TYPE_COPY_SEND, 0);
+    connectMsg.header.msgh_size = sizeof(connectMsg);
+    connectMsg.header.msgh_remote_port = serverPort;
+    connectMsg.header.msgh_local_port = MACH_PORT_NULL;
+    connectMsg.header.msgh_id = 1;
+
+    connectMsg.body.msgh_descriptor_count = 1;
+
+    connectMsg.portDescriptor.name = receivePort;
+    connectMsg.portDescriptor.disposition = MACH_MSG_TYPE_COPY_SEND;  // Send a send right
+    connectMsg.portDescriptor.type = MACH_MSG_PORT_DESCRIPTOR;
 
     kr = mach_msg(
-        &requestMsg.header,
+        &connectMsg.header,
         MACH_SEND_MSG,
-        sizeof(requestMsg),
+        sizeof(connectMsg),
         0,
         MACH_PORT_NULL,
         MACH_MSG_TIMEOUT_NONE,
         MACH_PORT_NULL
     );
 
+    mach_port_deallocate(mach_task_self(), serverPort);  // Done with bootstrap port
+
     if (kr != KERN_SUCCESS) {
-        fprintf(stderr, "mach_msg send request failed: %d\n", kr);
-        mach_port_deallocate(mach_task_self(), replyPort);
-        mach_port_deallocate(mach_task_self(), serverPort);
+        fprintf(stderr, "machChannelConnect: send failed: %d (%s)\n", kr, mach_error_string(kr));
+        mach_port_deallocate(mach_task_self(), receivePort);
         return NULL;
     }
 
-    // Receive reply with IOSurface port
+    fprintf(stderr, "Mach channel established, receive port: %u\n", receivePort);
+
+    MachChannel* channel = (MachChannel*)malloc(sizeof(MachChannel));
+    channel->receivePort = receivePort;
+    channel->connected = 1;
+
+    return channel;
+}
+
+// Receive an IOSurface port from parent (blocking)
+// Returns IOSurfaceRef (caller must CFRelease) or NULL on failure/disconnect
+IOSurfaceRef machChannelReceiveSurface(void* channelPtr) {
+    if (channelPtr == NULL) return NULL;
+
+    MachChannel* channel = (MachChannel*)channelPtr;
+    if (!channel->connected) return NULL;
+
+    // Receive message with port descriptor
     struct {
         mach_msg_header_t header;
         mach_msg_body_t body;
         mach_msg_port_descriptor_t portDescriptor;
         mach_msg_trailer_t trailer;
-    } replyMsg = {};
+    } msg = {};
 
-    kr = mach_msg(
-        &replyMsg.header,
+    kern_return_t kr = mach_msg(
+        &msg.header,
         MACH_RCV_MSG,
         0,
-        sizeof(replyMsg),
-        replyPort,
+        sizeof(msg),
+        channel->receivePort,
         MACH_MSG_TIMEOUT_NONE,
         MACH_PORT_NULL
     );
 
-    mach_port_deallocate(mach_task_self(), replyPort);
-    mach_port_deallocate(mach_task_self(), serverPort);
-
     if (kr != KERN_SUCCESS) {
-        fprintf(stderr, "mach_msg receive reply failed: %d\n", kr);
+        fprintf(stderr, "machChannelReceiveSurface: receive failed: %d (%s)\n", kr, mach_error_string(kr));
         return NULL;
     }
 
-    // Extract the IOSurface port from the reply
-    mach_port_t surfacePort = replyMsg.portDescriptor.name;
-    fprintf(stderr, "Received IOSurface Mach port: %u\n", surfacePort);
+    mach_port_t surfacePort = msg.portDescriptor.name;
+    fprintf(stderr, "Received IOSurface port: %u\n", surfacePort);
 
-    // Look up IOSurface from Mach port
+    // Convert Mach port to IOSurface
     IOSurfaceRef surface = IOSurfaceLookupFromMachPort(surfacePort);
-    if (surface == NULL) {
-        fprintf(stderr, "IOSurfaceLookupFromMachPort failed\n");
-        mach_port_deallocate(mach_task_self(), surfacePort);
-        return NULL;
-    }
-
-    // Deallocate our copy of the port (IOSurface retains what it needs)
     mach_port_deallocate(mach_task_self(), surfacePort);
 
-    fprintf(stderr, "Successfully obtained IOSurface from Mach port\n");
+    if (surface == NULL) {
+        fprintf(stderr, "IOSurfaceLookupFromMachPort failed\n");
+        return NULL;
+    }
+
+    fprintf(stderr, "Got IOSurface: %zux%zu\n", IOSurfaceGetWidth(surface), IOSurfaceGetHeight(surface));
     return surface;  // Caller must CFRelease
 }
 
-// Create an IOSurface-backed Metal texture from Mach service
-// serviceName: The Mach service name (passed from parent)
-// Returns: MTLTexture pointer or NULL on failure
-void* createIOSurfaceTextureFromMachService(void* context, const char* serviceName, int* outWidth, int* outHeight) {
-    if (context == NULL) return NULL;
+// Close the Mach channel
+void machChannelClose(void* channelPtr) {
+    if (channelPtr == NULL) return;
+
+    MachChannel* channel = (MachChannel*)channelPtr;
+    if (channel->receivePort != MACH_PORT_NULL) {
+        mach_port_deallocate(mach_task_self(), channel->receivePort);
+    }
+    free(channel);
+}
+
+// Create a Metal texture from an IOSurface
+// Returns MTLTexture pointer (caller must release via releaseIOSurfaceTexture)
+void* createTextureFromIOSurface(void* context, IOSurfaceRef surface, int* outWidth, int* outHeight) {
+    if (context == NULL || surface == NULL) return NULL;
 
     @autoreleasepool {
         MetalContext* ctx = (MetalContext*)context;
-
-        // Get IOSurface via Mach IPC
-        IOSurfaceRef surface = requestIOSurfaceFromMachService(serviceName);
-        if (surface == NULL) {
-            return NULL;
-        }
 
         size_t width = IOSurfaceGetWidth(surface);
         size_t height = IOSurfaceGetHeight(surface);
@@ -286,7 +269,6 @@ void* createIOSurfaceTextureFromMachService(void* context, const char* serviceNa
         if (outWidth) *outWidth = (int)width;
         if (outHeight) *outHeight = (int)height;
 
-        // Create texture descriptor for IOSurface-backed texture
         MTLTextureDescriptor* textureDescriptor = [[MTLTextureDescriptor alloc] init];
         textureDescriptor.width = width;
         textureDescriptor.height = height;
@@ -294,11 +276,9 @@ void* createIOSurfaceTextureFromMachService(void* context, const char* serviceNa
         textureDescriptor.usage = MTLTextureUsageRenderTarget | MTLTextureUsageShaderRead;
         textureDescriptor.storageMode = MTLStorageModeShared;
 
-        // Create texture backed by the IOSurface
         id<MTLTexture> texture = [ctx->device newTextureWithDescriptor:textureDescriptor
                                                              iosurface:surface
                                                                  plane:0];
-        CFRelease(surface);
 
         if (texture == nil) {
             return NULL;
@@ -306,5 +286,15 @@ void* createIOSurfaceTextureFromMachService(void* context, const char* serviceNa
 
         CFRetain((__bridge CFTypeRef)texture);
         return (__bridge void*)texture;
+    }
+}
+
+// Release an IOSurface-backed texture
+void releaseIOSurfaceTexture(void* texturePtr) {
+    if (texturePtr == NULL) return;
+
+    @autoreleasepool {
+        id<MTLTexture> texture = (__bridge id<MTLTexture>)texturePtr;
+        CFRelease((__bridge CFTypeRef)texture);
     }
 }

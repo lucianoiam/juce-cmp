@@ -46,24 +46,26 @@ std::string MachPortIPC::createServer()
 #endif
 }
 
-bool MachPortIPC::sendPort(uint32_t machPort)
+bool MachPortIPC::waitForClient()
 {
 #if __APPLE__
     if (serverPort_ == 0)
         return false;
 
-    // Wait for a message from the client (a request for the port)
-    // The client sends us a send-once right to reply to
+    // Wait for client to connect and send us its receive port
+    // Client sends a message with a port descriptor containing its receive port
     struct {
         mach_msg_header_t header;
+        mach_msg_body_t body;
+        mach_msg_port_descriptor_t portDescriptor;
         mach_msg_trailer_t trailer;
-    } requestMsg = {};
+    } connectMsg = {};
 
     kern_return_t kr = mach_msg(
-        &requestMsg.header,
+        &connectMsg.header,
         MACH_RCV_MSG,
         0,
-        sizeof(requestMsg),
+        sizeof(connectMsg),
         (mach_port_t)serverPort_,
         MACH_MSG_TIMEOUT_NONE,
         MACH_PORT_NULL
@@ -71,36 +73,52 @@ bool MachPortIPC::sendPort(uint32_t machPort)
 
     if (kr != KERN_SUCCESS)
     {
-        fprintf(stderr, "mach_msg receive failed: %d\n", kr);
+        fprintf(stderr, "waitForClient: mach_msg receive failed: %d (%s)\n", kr, mach_error_string(kr));
         return false;
     }
 
-    fprintf(stderr, "Received request from client, sending port %u\n", machPort);
+    // Extract client's port - this is a send right to client's receive port
+    clientPort_ = (uint32_t)connectMsg.portDescriptor.name;
+    fprintf(stderr, "Client connected, got send right to port %u\n", clientPort_);
 
-    // Reply with the IOSurface Mach port
-    // Use complex message with port descriptor
+    return true;
+#else
+    return false;
+#endif
+}
+
+bool MachPortIPC::sendPort(uint32_t machPort)
+{
+#if __APPLE__
+    if (clientPort_ == 0)
+    {
+        fprintf(stderr, "sendPort: no client connected\n");
+        return false;
+    }
+
+    // Send IOSurface port to client via the established channel
     struct {
         mach_msg_header_t header;
         mach_msg_body_t body;
         mach_msg_port_descriptor_t portDescriptor;
-    } replyMsg = {};
+    } msg = {};
 
-    replyMsg.header.msgh_bits = MACH_MSGH_BITS_COMPLEX | MACH_MSGH_BITS(MACH_MSG_TYPE_MOVE_SEND_ONCE, 0);
-    replyMsg.header.msgh_size = sizeof(replyMsg);
-    replyMsg.header.msgh_remote_port = requestMsg.header.msgh_remote_port;
-    replyMsg.header.msgh_local_port = MACH_PORT_NULL;
-    replyMsg.header.msgh_id = requestMsg.header.msgh_id + 100;  // Convention: reply ID = request ID + 100
+    msg.header.msgh_bits = MACH_MSGH_BITS_COMPLEX | MACH_MSGH_BITS(MACH_MSG_TYPE_COPY_SEND, 0);
+    msg.header.msgh_size = sizeof(msg);
+    msg.header.msgh_remote_port = (mach_port_t)clientPort_;
+    msg.header.msgh_local_port = MACH_PORT_NULL;
+    msg.header.msgh_id = 1;  // Surface port message
 
-    replyMsg.body.msgh_descriptor_count = 1;
+    msg.body.msgh_descriptor_count = 1;
 
-    replyMsg.portDescriptor.name = (mach_port_t)machPort;
-    replyMsg.portDescriptor.disposition = MACH_MSG_TYPE_COPY_SEND;  // Copy send right to receiver
-    replyMsg.portDescriptor.type = MACH_MSG_PORT_DESCRIPTOR;
+    msg.portDescriptor.name = (mach_port_t)machPort;
+    msg.portDescriptor.disposition = MACH_MSG_TYPE_COPY_SEND;
+    msg.portDescriptor.type = MACH_MSG_PORT_DESCRIPTOR;
 
-    kr = mach_msg(
-        &replyMsg.header,
+    kern_return_t kr = mach_msg(
+        &msg.header,
         MACH_SEND_MSG,
-        sizeof(replyMsg),
+        sizeof(msg),
         0,
         MACH_PORT_NULL,
         MACH_MSG_TIMEOUT_NONE,
@@ -109,11 +127,11 @@ bool MachPortIPC::sendPort(uint32_t machPort)
 
     if (kr != KERN_SUCCESS)
     {
-        fprintf(stderr, "mach_msg send failed: %d\n", kr);
+        fprintf(stderr, "sendPort: mach_msg send failed: %d (%s)\n", kr, mach_error_string(kr));
         return false;
     }
 
-    fprintf(stderr, "Sent IOSurface port to client\n");
+    fprintf(stderr, "Sent IOSurface port %u to client\n", machPort);
     return true;
 #else
     (void)machPort;
@@ -124,6 +142,11 @@ bool MachPortIPC::sendPort(uint32_t machPort)
 void MachPortIPC::destroyServer()
 {
 #if __APPLE__
+    if (clientPort_ != 0)
+    {
+        mach_port_deallocate(mach_task_self(), (mach_port_t)clientPort_);
+        clientPort_ = 0;
+    }
     if (serverPort_ != 0)
     {
         mach_port_deallocate(mach_task_self(), (mach_port_t)serverPort_);

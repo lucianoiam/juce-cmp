@@ -6,32 +6,49 @@ IOSurface is used for zero-copy GPU texture sharing between the host (JUCE plugi
 
 ### Current Implementation
 
-Uses `kIOSurfaceIsGlobal` flag with `IOSurfaceLookup()`:
+Uses Mach port IPC via `bootstrap_check_in()` and `mach_msg()`:
 
 ```objc
-// Host creates surface with global flag
+// Host: Create surface (no kIOSurfaceIsGlobal!)
 NSDictionary* props = @{
     (id)kIOSurfaceWidth: @(width),
     (id)kIOSurfaceHeight: @(height),
     (id)kIOSurfaceBytesPerElement: @4,
-    (id)kIOSurfacePixelFormat: @((uint32_t)'BGRA'),
-    (id)kIOSurfaceIsGlobal: @YES  // Deprecated but required
+    (id)kIOSurfacePixelFormat: @((uint32_t)'BGRA')
 };
 IOSurfaceRef surface = IOSurfaceCreate((__bridge CFDictionaryRef)props);
 
-// Host sends 4-byte surface ID via socket
-uint32_t surfaceID = IOSurfaceGetID(surface);
-write(socketFD, &surfaceID, sizeof(surfaceID));
+// Host: Create Mach port and send via bootstrap channel
+mach_port_t surfacePort = IOSurfaceCreateMachPort(surface);
+// ... send via mach_msg() to child's receive port
 
-// Child looks up by ID
-IOSurfaceRef surface = IOSurfaceLookup(surfaceID);
+// Child: Receive Mach port and look up IOSurface
+mach_port_t surfacePort = /* received via mach_msg() */;
+IOSurfaceRef surface = IOSurfaceLookupFromMachPort(surfacePort);
 ```
 
-**Note**: `kIOSurfaceIsGlobal` is deprecated but still functional. The deprecation warning is suppressed with `#pragma clang diagnostic ignored "-Wdeprecated-declarations"`.
+**Key components:**
+- `MachPortIPC` class (C++): Handles bootstrap registration and port sending
+- `machChannelConnect()` / `machChannelReceiveSurface()` (Obj-C): Client-side channel
+
+**Flow:**
+1. Host registers service via `bootstrap_check_in()` with unique name
+2. Host passes service name to child via `--mach-service=<name>`
+3. Child looks up service via `bootstrap_look_up()`
+4. Child creates receive port and sends it to host
+5. Host receives child's port, establishing bidirectional channel
+6. Host sends IOSurface Mach ports for initial surface and resizes
+7. Child receives ports and looks up IOSurfaces
+
+**Advantages:**
+- No deprecated APIs (`kIOSurfaceIsGlobal` not used)
+- No special entitlements required
+- Works in sandboxed environments
+- Bidirectional: host pushes new surfaces on resize
 
 ### Failed Alternatives
 
-Several approaches were investigated to eliminate the deprecated `kIOSurfaceIsGlobal` flag:
+Several approaches were investigated before the Mach IPC solution:
 
 #### 1. SCM_RIGHTS with fileport (Failed)
 
@@ -73,40 +90,47 @@ IOSurfaceRef surface = IOSurfaceLookupFromMachPort(surfacePort);
 
 **Root cause**: `task_for_pid()` requires the `com.apple.security.cs.debugger` entitlement on modern macOS. Despite the name, this entitlement controls access to another process's task port (used by debuggers but also needed for Mach port manipulation). Even parent→child access after fork requires this entitlement, which must be code-signed by Apple or with SIP disabled.
 
-#### 3. XPC (Not implemented - overkill)
+#### 3. XPC (Considered - overkill)
 
 - Use `IOSurfaceCreateXPCObject()` to wrap surface
-- Requires XPC service with launchd plist
+- Requires XPC service with launchd plist (for non-anonymous XPC)
+- Anonymous XPC requires existing connection to share endpoint
 - Significant architecture change for cross-platform project
 
-#### 4. Direct Mach IPC via mach_msg() (Not implemented)
+#### 4. kIOSurfaceIsGlobal (Deprecated)
 
-- Send port rights directly with `mach_msg()`
-- Requires bootstrap server registration
-- Complex low-level API
+The original approach that was replaced:
 
-### Conclusion
+```objc
+// Host creates surface with global flag (DEPRECATED)
+NSDictionary* props = @{
+    ...
+    (id)kIOSurfaceIsGlobal: @YES  // Deprecated!
+};
+IOSurfaceRef surface = IOSurfaceCreate((__bridge CFDictionaryRef)props);
 
-None of the Mach port-based alternatives were ever viable for this use case:
+// Host sends 4-byte surface ID via socket
+uint32_t surfaceID = IOSurfaceGetID(surface);
+write(socketFD, &surfaceID, sizeof(surfaceID));
 
-- **SCM_RIGHTS**: Only passes Unix FDs, not Mach ports
-- **task_for_pid()**: Requires restricted entitlements that regular apps cannot obtain
-- **XPC**: Requires launchd infrastructure, impractical for cross-platform project
-- **mach_msg()**: Requires bootstrap server registration, excessive complexity
+// Child looks up by ID
+IOSurfaceRef surface = IOSurfaceLookup(surfaceID);
+```
 
-The `kIOSurfaceIsGlobal` + `IOSurfaceLookup()` approach is the only practical solution. Apple deprecated it but hasn't removed it because there's no simple replacement for cross-process IOSurface sharing outside of XPC. The deprecation is cosmetic - it works reliably.
+This approach worked but used a deprecated API. The Mach IPC solution avoids this.
 
 ## IPC Channel
 
 Uses `socketpair(AF_UNIX, SOCK_STREAM, 0, sockets)` for bidirectional communication:
 
-- Single socket pair replaces previous stdin/stdout pipes
+- Single socket pair for input events, resize notifications, ValueTree messages
 - Bidirectional: host and child can send/receive on same FD
-- Simpler than managing two separate pipes
 - Child receives socket FD via `--socket-fd=N` argument
+- IOSurface sharing uses separate Mach port channel (not socket)
 
 ## References
 
 - [IOSurface Programming Guide](https://developer.apple.com/library/archive/documentation/GraphicsImaging/Conceptual/IOSurface/)
 - [Cross-process Rendering (Russ Bishop)](http://www.russbishop.net/cross-process-rendering)
 - [Mach Ports (fdiv.net)](https://fdiv.net/category/apple/mach-ports)
+- [Example of IOSurfaceCreateMachPort/IOSurfaceLookupFromMachPort](https://fdiv.net/2011/01/27/example-iosurfacecreatemachport-and-iosurfacelookupfrommachport)

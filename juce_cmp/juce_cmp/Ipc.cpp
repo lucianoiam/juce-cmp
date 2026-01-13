@@ -102,25 +102,6 @@ void Ipc::sendEvent(const juce::ValueTree& tree)
 #endif
 }
 
-void Ipc::sendSurfaceID(uint32_t surfaceID)
-{
-    if (socketFD < 0) return;
-
-#if JUCE_MAC || JUCE_LINUX
-    uint8_t header[2] = { EVENT_TYPE_GFX, GFX_EVENT_SURFACE_ID };
-    ssize_t written = write(socketFD, header, 2);
-    if (written != 2)
-    {
-        socketFD = -1;
-        return;
-    }
-
-    written = write(socketFD, &surfaceID, sizeof(surfaceID));
-    if (written != sizeof(surfaceID))
-        socketFD = -1;
-#endif
-}
-
 // =============================================================================
 // RX: UI → Host
 // =============================================================================

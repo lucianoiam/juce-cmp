@@ -49,16 +49,13 @@ bool Surface::resize(int width, int height)
     width_ = width;
     height_ = height;
 
-#pragma clang diagnostic push
-#pragma clang diagnostic ignored "-Wdeprecated-declarations"
+    // No kIOSurfaceIsGlobal - surface is shared via Mach port IPC
     NSDictionary* props = @{
         (id)kIOSurfaceWidth: @(width),
         (id)kIOSurfaceHeight: @(height),
         (id)kIOSurfaceBytesPerElement: @4,
-        (id)kIOSurfacePixelFormat: @((uint32_t)'BGRA'),
-        (id)kIOSurfaceIsGlobal: @YES
+        (id)kIOSurfacePixelFormat: @((uint32_t)'BGRA')
     };
-#pragma clang diagnostic pop
 
     IOSurfaceRef newSurface = IOSurfaceCreate((__bridge CFDictionaryRef)props);
     if (newSurface != nullptr)
@@ -99,17 +96,6 @@ void Surface::release()
 bool Surface::isValid() const
 {
     return surface_ != nullptr;
-}
-
-uint32_t Surface::getID() const
-{
-#if __APPLE__
-    if (surface_ == nullptr)
-        return 0;
-    return IOSurfaceGetID((IOSurfaceRef)surface_);
-#else
-    return 0;
-#endif
 }
 
 uint32_t Surface::createMachPort() const

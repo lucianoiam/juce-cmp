@@ -12,7 +12,7 @@ namespace juce_cmp
  * Surface - Manages shared GPU surfaces for cross-process rendering.
  *
  * On macOS: Uses IOSurface for zero-copy GPU sharing.
- *           Surfaces are shared via global ID lookup.
+ *           Surfaces are shared via Mach port IPC (see MachPortIPC.h).
  * On Windows: Will use DXGI shared textures (TODO)
  * On Linux: Will use DMA-BUF file descriptors (TODO)
  */
@@ -37,14 +37,6 @@ public:
 
     /** Check if surface is valid. */
     bool isValid() const;
-
-    /**
-     * Get the surface ID for sharing with another process.
-     * On macOS: Returns the IOSurface global ID.
-     * Note: Requires kIOSurfaceIsGlobal flag (deprecated but functional).
-     * Returns 0 on failure.
-     */
-    uint32_t getID() const;
 
     /**
      * Create a Mach port for the surface (macOS only).

@@ -33,12 +33,12 @@ bool ComposeProvider::launch(const std::string& executable, int width, int heigh
         return false;
 
 #if __APPLE__
-    // Set up Mach IPC for initial surface sharing (no deprecated kIOSurfaceIsGlobal needed)
+    // Set up Mach IPC for surface sharing
     std::string machService = machPortIPC_.createServer();
     if (machService.empty())
     {
-        // Fall back to socket-based surface ID (requires kIOSurfaceIsGlobal)
-        machService = "";
+        surface_.release();
+        return false;
     }
 #else
     std::string machService;
@@ -70,25 +70,18 @@ bool ComposeProvider::launch(const std::string& executable, int width, int heigh
     ipc_.startReceiving();
 
 #if __APPLE__
-    if (!machService.empty())
-    {
-        // Send IOSurface Mach port to child in a separate thread (blocking call)
-        uint32_t surfacePort = surface_.createMachPort();
-        if (surfacePort != 0)
+    // Wait for client connection and send initial surface in background thread
+    machPortThread_ = std::thread([this]() {
+        if (!machPortIPC_.waitForClient())
         {
-            machPortThread_ = std::thread([this, surfacePort]() {
-                machPortIPC_.sendPort(surfacePort);
-                // Deallocate our copy of the port after sending
-                mach_port_deallocate(mach_task_self(), (mach_port_t)surfacePort);
-            });
+            fprintf(stderr, "Failed to establish Mach channel with child\n");
+            return;
         }
-    }
-    else
+
+        // Send initial IOSurface
+        sendSurfacePort();
+    });
 #endif
-    {
-        // Fall back: Send surface ID via socket (requires kIOSurfaceIsGlobal)
-        ipc_.sendSurfaceID(surface_.getID());
-    }
 
     // Set up view
     view_.create();
@@ -142,12 +135,14 @@ void ComposeProvider::resize(int width, int height)
 
     if (surface_.resize(pixelW, pixelH))
     {
-        // Send resize event
+        // Send resize event (dimensions, no surface ID)
         auto e = InputEventFactory::resize(pixelW, pixelH, scale_);
         ipc_.sendInput(e);
 
-        // Send new surface ID
-        ipc_.sendSurfaceID(surface_.getID());
+#if __APPLE__
+        // Send new surface via Mach port channel
+        sendSurfacePort();
+#endif
 
         view_.setPendingSurface(surface_.getNativeHandle());
     }
@@ -162,5 +157,17 @@ void ComposeProvider::sendEvent(const juce::ValueTree& tree)
 {
     ipc_.sendEvent(tree);
 }
+
+#if __APPLE__
+void ComposeProvider::sendSurfacePort()
+{
+    uint32_t surfacePort = surface_.createMachPort();
+    if (surfacePort != 0)
+    {
+        machPortIPC_.sendPort(surfacePort);
+        mach_port_deallocate(mach_task_self(), (mach_port_t)surfacePort);
+    }
+}
+#endif
 
 }  // namespace juce_cmp

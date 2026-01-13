@@ -52,17 +52,14 @@ class Ipc(private val socketFD: Int) {
     // ---- Receiving (Host → UI) ----
 
     private var onInputEvent: ((InputEvent) -> Unit)? = null
-    private var onSurfaceID: ((Int) -> Unit)? = null
     private var onJuceEvent: ((JuceValueTree) -> Unit)? = null
 
     fun startReceiving(
         onInputEvent: (InputEvent) -> Unit,
-        onSurfaceID: ((Int) -> Unit)? = null,
         onJuceEvent: ((JuceValueTree) -> Unit)? = null
     ) {
         if (running) return
         this.onInputEvent = onInputEvent
-        this.onSurfaceID = onSurfaceID
         this.onJuceEvent = onJuceEvent
         running = true
         thread = Thread({
@@ -143,17 +140,8 @@ class Ipc(private val socketFD: Int) {
             kotlin.system.exitProcess(0)
         }
 
-        when (subtype) {
-            GfxEvent.SURFACE_ID -> {
-                val buffer = readFully(4) ?: run {
-                    running = false
-                    kotlin.system.exitProcess(0)
-                }
-                val surfaceID = ByteBuffer.wrap(buffer).order(ByteOrder.LITTLE_ENDIAN).int
-                onSurfaceID?.invoke(surfaceID)
-            }
-            // GfxEvent.FIRST_FRAME is UI → Host only, shouldn't receive here
-        }
+        // GfxEvent.FIRST_FRAME is UI → Host only
+        // IOSurface sharing uses Mach port IPC, not socket events
     }
 
     private fun handleJuceEvent() {

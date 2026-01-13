@@ -18,7 +18,7 @@ object EventType {
 }
 
 // GFX event types (second byte for EventType.GFX)
+// Note: IOSurface sharing uses Mach port IPC, not socket
 object GfxEvent {
-    const val SURFACE_ID = 0    // Host→UI: 4-byte surface ID follows
-    const val FIRST_FRAME = 1   // UI→Host: surface ready to display
+    const val FIRST_FRAME = 0   // UI→Host: surface ready to display
 }

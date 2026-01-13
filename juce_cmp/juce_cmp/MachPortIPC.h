@@ -10,12 +10,17 @@ namespace juce_cmp
 {
 
 /**
- * MachPortIPC - Mach port-based IPC for passing port rights between processes.
+ * MachPortIPC - Bidirectional Mach port channel for IOSurface sharing.
  *
- * Uses bootstrap server registration to establish a connection, then sends
- * Mach port rights (e.g., IOSurface ports) via mach_msg().
+ * Uses bootstrap server for initial handshake, then maintains a persistent
+ * channel where the parent can push IOSurface Mach ports at any time.
  *
- * This avoids task_for_pid() which requires restricted entitlements.
+ * Flow:
+ * 1. Parent: createServer() - registers with bootstrap
+ * 2. Child: connects via bootstrap_look_up, sends its receive port
+ * 3. Parent: waitForClient() - receives child's port, establishes channel
+ * 4. Parent: sendPort() - pushes IOSurface ports (initial, resize, etc.)
+ * 5. Child: receives ports via its receive port
  */
 class MachPortIPC
 {
@@ -34,8 +39,16 @@ public:
     std::string createServer();
 
     /**
-     * Server side: Wait for client to connect and send a Mach port right.
-     * Returns true on success. Blocks until port is received.
+     * Server side: Wait for client to connect and establish channel.
+     * Must be called before sendPort(). Blocks until client connects.
+     * Returns true on success.
+     */
+    bool waitForClient();
+
+    /**
+     * Server side: Send a Mach port to the client.
+     * Can be called multiple times after waitForClient().
+     * Returns true on success.
      */
     bool sendPort(uint32_t machPort);
 
@@ -51,7 +64,8 @@ public:
 
 private:
 #if __APPLE__
-    uint32_t serverPort_ = 0;  // mach_port_t
+    uint32_t serverPort_ = 0;   // Bootstrap receive port
+    uint32_t clientPort_ = 0;   // Send right to client's receive port
 #endif
     std::string serviceName_;
 };

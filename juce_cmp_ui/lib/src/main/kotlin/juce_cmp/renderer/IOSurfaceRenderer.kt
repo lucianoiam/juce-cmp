@@ -56,10 +56,16 @@ private interface NativeLib : Library {
     fun destroyMetalContext(context: Pointer)
     fun getMetalDevice(context: Pointer): Pointer?
     fun getMetalQueue(context: Pointer): Pointer?
-    fun createIOSurfaceTexture(context: Pointer, surfaceID: Int, outWidth: IntByReference?, outHeight: IntByReference?): Pointer?
-    fun createIOSurfaceTextureFromMachService(context: Pointer, serviceName: String, outWidth: IntByReference?, outHeight: IntByReference?): Pointer?
     fun releaseIOSurfaceTexture(texturePtr: Pointer)
     fun flushAndSync(context: Pointer)
+
+    // Mach channel for receiving IOSurface ports from parent
+    fun machChannelConnect(serviceName: String): Pointer?
+    fun machChannelReceiveSurface(channel: Pointer): Pointer?  // Returns IOSurfaceRef
+    fun machChannelClose(channel: Pointer)
+
+    // Create texture from IOSurface reference
+    fun createTextureFromIOSurface(context: Pointer, surface: Pointer, outWidth: IntByReference?, outHeight: IntByReference?): Pointer?
 
     companion object {
         val INSTANCE: NativeLib by lazy {
@@ -89,37 +95,19 @@ private class RenderResources(
 }
 
 /**
- * Creates RenderResources from an IOSurface ID.
+ * Creates RenderResources from an IOSurface pointer (received via Mach channel).
  */
-private fun createRenderResources(
+private fun createRenderResourcesFromIOSurface(
     metalContext: Pointer,
     devicePtr: Pointer,
     queuePtr: Pointer,
-    surfaceID: Int
+    ioSurface: Pointer
 ): RenderResources {
     val widthRef = IntByReference()
     val heightRef = IntByReference()
-    val texturePtr = NativeLib.INSTANCE.createIOSurfaceTexture(
-        metalContext, surfaceID, widthRef, heightRef
-    ) ?: error("Failed to create IOSurface-backed texture for ID $surfaceID")
-
-    return createRenderResourcesFromTexture(metalContext, devicePtr, queuePtr, texturePtr, widthRef.value, heightRef.value)
-}
-
-/**
- * Creates RenderResources from a Mach service name.
- */
-private fun createRenderResourcesFromMachService(
-    metalContext: Pointer,
-    devicePtr: Pointer,
-    queuePtr: Pointer,
-    machServiceName: String
-): RenderResources {
-    val widthRef = IntByReference()
-    val heightRef = IntByReference()
-    val texturePtr = NativeLib.INSTANCE.createIOSurfaceTextureFromMachService(
-        metalContext, machServiceName, widthRef, heightRef
-    ) ?: error("Failed to create IOSurface-backed texture from Mach service '$machServiceName'")
+    val texturePtr = NativeLib.INSTANCE.createTextureFromIOSurface(
+        metalContext, ioSurface, widthRef, heightRef
+    ) ?: error("Failed to create texture from IOSurface")
 
     return createRenderResourcesFromTexture(metalContext, devicePtr, queuePtr, texturePtr, widthRef.value, heightRef.value)
 }
@@ -168,13 +156,16 @@ private fun createRenderResourcesFromTexture(
  * process displays.
  *
  * Architecture:
- * 1. Host creates IOSurface with kIOSurfaceIsGlobal and sends ID via socket
- * 2. Native library looks up IOSurface by ID
+ * 1. Host creates IOSurface and sends Mach port via bootstrap channel
+ * 2. Native library receives IOSurface via Mach port IPC
  * 3. Native library creates an MTLTexture backed by the IOSurface
  * 4. Skia's DirectContext.makeMetal() uses our Metal device/queue
  * 5. Skia's BackendRenderTarget.makeMetal() wraps the IOSurface texture
  * 6. Compose's CanvasLayersComposeScene renders to this surface
  * 7. GPU work goes directly to the IOSurface - host sees it immediately!
+ *
+ * Surface updates (initial + resize) come through the Mach channel.
+ * Input/events come through the socket.
  */
 @OptIn(InternalComposeUiApi::class)
 private fun runIOSurfaceRendererImpl(
@@ -186,9 +177,17 @@ private fun runIOSurfaceRendererImpl(
     onJuceEvent: ((tree: JuceValueTree) -> Unit)? = null,
     content: @Composable () -> Unit
 ) {
+    if (machServiceName == null) {
+        error("Mach service name is required for IOSurface sharing")
+    }
+
     // Create Metal context (device + command queue)
     val metalContext = NativeLib.INSTANCE.createMetalContext()
         ?: error("Failed to create Metal context")
+
+    // Connect to parent's Mach channel for receiving IOSurfaces
+    val machChannel = NativeLib.INSTANCE.machChannelConnect(machServiceName)
+        ?: error("Failed to connect to Mach service '$machServiceName'")
 
     try {
         // Get Metal device and queue pointers for Skia
@@ -200,59 +199,65 @@ private fun runIOSurfaceRendererImpl(
         // Track if scene needs redraw (atomic for thread safety)
         val needsRedraw = AtomicBoolean(true)
 
-        // Pending resize: holds resize event when resize is requested
+        // Pending resize event from socket
         val pendingResize = AtomicReference<InputEvent?>(null)
 
-        // Pending surface ID: set when we receive a new surface ID
-        val pendingSurfaceID = AtomicReference<Int?>(null)
+        // Pending IOSurface from Mach channel
+        val pendingIOSurface = AtomicReference<Pointer?>(null)
 
         // Event queue for input events
         val eventQueue = ConcurrentLinkedQueue<InputEvent>()
 
-        // Start receiving events from host via socket
-        // The initial surface ID will arrive as EVENT_TYPE_SURFACE_ID
+        // Start receiving events from host via socket (must be before surface thread so isRunning is true)
         ipc.startReceiving(
             onInputEvent = { event ->
                 if (event.type == InputType.RESIZE) {
-                    // Resize events handled specially - store for main loop
                     pendingResize.set(event)
                 } else {
                     eventQueue.offer(event)
                 }
                 needsRedraw.set(true)
             },
-            onSurfaceID = { surfaceID ->
-                pendingSurfaceID.set(surfaceID)
-                needsRedraw.set(true)
-            },
             onJuceEvent = onJuceEvent
         )
 
-        // Initial render resources - use Mach service if available, otherwise wait for surface ID
-        var resources = if (machServiceName != null) {
-            // Use Mach IPC to get initial IOSurface (no kIOSurfaceIsGlobal needed)
-            createRenderResourcesFromMachService(metalContext, devicePtr, queuePtr, machServiceName)
-        } else {
-            // Fall back to surface ID via socket (requires kIOSurfaceIsGlobal)
-            var initialSurfaceID: Int? = null
-            while (initialSurfaceID == null && ipc.isRunning) {
-                initialSurfaceID = pendingSurfaceID.getAndSet(null)
-                if (initialSurfaceID == null) {
-                    Thread.sleep(10)
+        // Start thread to receive IOSurfaces from Mach channel
+        val surfaceReceiverThread = Thread {
+            while (ipc.isRunning) {
+                val surface = NativeLib.INSTANCE.machChannelReceiveSurface(machChannel)
+                if (surface != null) {
+                    pendingIOSurface.set(surface)
+                    needsRedraw.set(true)
+                } else {
+                    break  // Channel closed
                 }
             }
-
-            if (initialSurfaceID == null) {
-                error("Failed to receive initial surface ID")
-            }
-
-            createRenderResources(metalContext, devicePtr, queuePtr, initialSurfaceID)
+        }.apply {
+            name = "MachSurfaceReceiver"
+            isDaemon = true
+            start()
         }
 
-        // Track current scale factor (may change on resize if window moves to different display)
+        // Wait for initial IOSurface from Mach channel
+        var initialSurface: Pointer? = null
+        while (initialSurface == null && ipc.isRunning) {
+            initialSurface = pendingIOSurface.getAndSet(null)
+            if (initialSurface == null) {
+                Thread.sleep(10)
+            }
+        }
+
+        if (initialSurface == null) {
+            error("Failed to receive initial IOSurface")
+        }
+
+        // Create initial render resources
+        var resources = createRenderResourcesFromIOSurface(metalContext, devicePtr, queuePtr, initialSurface)
+
+        // Track current scale factor
         var currentScale = scaleFactor
 
-        // Create Compose scene - use scaleFactor for proper Retina/HiDPI rendering
+        // Create Compose scene
         var scene = CanvasLayersComposeScene(
             density = Density(currentScale),
             size = IntSize(resources.width, resources.height),
@@ -261,38 +266,34 @@ private fun runIOSurfaceRendererImpl(
         )
         scene.setContent(content)
 
-        // Input dispatcher - needs scale factor to convert host points to Compose pixels
+        // Input dispatcher
         var inputDispatcher = InputDispatcher(scene, currentScale)
 
         try {
-            // Render loop - Compose draws directly to IOSurface!
+            // Render loop
             runBlocking {
                 var frameCount = 0
 
-                // Run until socket closes (host signals exit by closing socket)
                 while (ipc.isRunning) {
                     try {
                         val frameStart = System.nanoTime()
 
-                        // Check for pending resize + new surface ID
+                        // Check for new IOSurface (resize)
+                        val newSurface = pendingIOSurface.getAndSet(null)
                         val resizeEvent = pendingResize.getAndSet(null)
-                        val newSurfaceID = pendingSurfaceID.getAndSet(null)
 
-                        if (resizeEvent != null && newSurfaceID != null) {
-                            val newWidth = resizeEvent.width
-                            val newHeight = resizeEvent.height
-                            val newScale = resizeEvent.scaleFactor
-
-                            // Close old resources (but keep the scene!)
+                        if (newSurface != null) {
+                            // New surface arrived - swap it in
                             resources.close()
+                            resources = createRenderResourcesFromIOSurface(metalContext, devicePtr, queuePtr, newSurface)
 
-                            // Create new resources for the new surface
-                            resources = createRenderResources(metalContext, devicePtr, queuePtr, newSurfaceID)
+                            // Update scene size from resize event if available, otherwise from surface dimensions
+                            val newWidth = resizeEvent?.width ?: resources.width
+                            val newHeight = resizeEvent?.height ?: resources.height
+                            val newScale = resizeEvent?.scaleFactor ?: currentScale
 
-                            // Update scene size - preserves all Compose state!
                             scene.size = IntSize(newWidth, newHeight)
 
-                            // Update density if scale factor changed
                             if (newScale != currentScale) {
                                 currentScale = newScale
                                 scene.close()
@@ -311,20 +312,17 @@ private fun runIOSurfaceRendererImpl(
                             needsRedraw.set(true)
                         }
 
-                        // Process pending input events
+                        // Process input events
                         while (true) {
                             val event = eventQueue.poll() ?: break
                             inputDispatcher.dispatch(event)
                         }
 
-                        // Render Compose content to IOSurface
+                        // Render
                         val canvas = resources.skiaSurface.canvas
                         scene.render(canvas.asComposeCanvas(), frameStart)
-
-                        // Flush and SYNC - this waits for GPU to finish
                         resources.skiaSurface.flushAndSubmit(syncCpu = true)
 
-                        // Invoke frame callback if provided
                         onFrameRendered?.invoke(frameCount.toLong(), resources.skiaSurface)
 
                         if (frameCount == 0) {
@@ -345,6 +343,7 @@ private fun runIOSurfaceRendererImpl(
             resources.close()
         }
     } finally {
+        NativeLib.INSTANCE.machChannelClose(machChannel)
         NativeLib.INSTANCE.destroyMetalContext(metalContext)
     }
 }

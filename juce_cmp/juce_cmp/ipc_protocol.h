@@ -26,13 +26,13 @@ extern "C" {
 /*
  * GFX event types (second byte for EVENT_TYPE_GFX)
  */
-#define GFX_EVENT_SURFACE_ID        0  /* Host→UI: 4-byte surface ID follows */
-#define GFX_EVENT_FIRST_FRAME       1  /* UI→Host: surface ready to display */
+#define GFX_EVENT_FIRST_FRAME       0  /* UI→Host: surface ready to display */
 
 /**
  * GFX event payload - 1 byte subtype, follows EVENT_TYPE_GFX prefix.
- *   GFX_EVENT_SURFACE_ID: 4-byte surface ID (little-endian)
  *   GFX_EVENT_FIRST_FRAME: Surface ready to display (no additional data)
+ *
+ * Note: IOSurface sharing uses Mach port IPC (see MachPortIPC.h), not socket.
  *
  * INPUT event payload - see InputEvent.h
  *
