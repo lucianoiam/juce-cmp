@@ -20,5 +20,5 @@ object EventType {
 // CMP event types (second byte for EventType.CMP)
 // Note: IOSurface sharing uses Mach port IPC, not socket
 object CmpEvent {
-    const val FIRST_FRAME = 0   // UI→Host: surface ready to display
+    const val SURFACE_READY = 0   // UI→Host: first frame rendered to new surface
 }

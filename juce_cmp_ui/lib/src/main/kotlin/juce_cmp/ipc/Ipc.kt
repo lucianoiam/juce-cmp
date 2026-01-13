@@ -140,7 +140,7 @@ class Ipc(private val socketFD: Int) {
             kotlin.system.exitProcess(0)
         }
 
-        // CmpEvent.FIRST_FRAME is UI → Host only
+        // CmpEvent.FRAME_READY is UI → Host only
         // IOSurface sharing uses Mach port IPC, not socket events
     }
 
@@ -194,12 +194,12 @@ class Ipc(private val socketFD: Int) {
     }
 
     /**
-     * Notify host that first frame has been rendered and surface is ready.
-     * Format: EventType.CMP + CmpEvent.FIRST_FRAME
+     * Notify host that first frame has been rendered to a new surface.
+     * Format: EventType.CMP + CmpEvent.SURFACE_READY
      */
-    fun sendFirstFrameRendered() {
+    fun sendSurfaceReady() {
         synchronized(writeLock) {
-            writeFully(byteArrayOf(EventType.CMP.toByte(), CmpEvent.FIRST_FRAME.toByte()))
+            writeFully(byteArrayOf(EventType.CMP.toByte(), CmpEvent.SURFACE_READY.toByte()))
         }
     }
 }

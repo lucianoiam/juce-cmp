@@ -134,11 +134,11 @@ void Ipc::handleCmpEvent()
     if (readFully(&subtype, 1) != 1)
         return;
 
-    if (subtype == CMP_EVENT_FIRST_FRAME && onFirstFrame)
+    if (subtype == CMP_EVENT_SURFACE_READY && onFrameReady)
     {
         juce::MessageManager::callAsync([this]() {
-            if (onFirstFrame)
-                onFirstFrame();
+            if (onFrameReady)
+                onFrameReady();
         });
     }
 }

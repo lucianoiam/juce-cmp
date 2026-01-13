@@ -26,11 +26,11 @@ extern "C" {
 /*
  * CMP event types (second byte for EVENT_TYPE_CMP)
  */
-#define CMP_EVENT_FIRST_FRAME       0  /* UI→Host: surface ready to display */
+#define CMP_EVENT_SURFACE_READY     0  /* UI→Host: first frame rendered to new surface */
 
 /**
  * CMP event payload - 1 byte subtype, follows EVENT_TYPE_CMP prefix.
- *   CMP_EVENT_FIRST_FRAME: Surface ready to display (no additional data)
+ *   CMP_EVENT_SURFACE_READY: First frame rendered to new surface, ready to display (no additional data)
  *
  * Note: IOSurface sharing uses Mach port IPC (see MachPort.h), not socket.
  *

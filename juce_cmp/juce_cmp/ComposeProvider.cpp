@@ -62,7 +62,10 @@ bool ComposeProvider::launch(const std::string& executable, int width, int heigh
             eventCallback_(tree);
     });
 
-    ipc_.setFirstFrameHandler([this]() {
+    ipc_.setFrameReadyHandler([this]() {
+        // Swap to latest surface now that child has rendered to it
+        view_.setPendingSurface(surface_.getNativeHandle());
+
         if (firstFrameCallback_)
             firstFrameCallback_();
     });
@@ -138,10 +141,9 @@ void ComposeProvider::resize(int width, int height)
 
 #if __APPLE__
         // Send new surface via Mach port channel
+        // Child will send FRAME_READY after rendering, then we swap surfaces
         sendSurfacePort();
 #endif
-
-        view_.setPendingSurface(surface_.getNativeHandle());
     }
 }
 

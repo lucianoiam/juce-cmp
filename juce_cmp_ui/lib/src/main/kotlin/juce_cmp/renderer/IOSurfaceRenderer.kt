@@ -273,6 +273,7 @@ private fun runIOSurfaceRendererImpl(
             // Render loop
             runBlocking {
                 var frameCount = 0
+                var surfaceChanged = true  // Initial surface needs SURFACE_READY signal
 
                 while (ipc.isRunning) {
                     try {
@@ -310,6 +311,7 @@ private fun runIOSurfaceRendererImpl(
                             }
 
                             needsRedraw.set(true)
+                            surfaceChanged = true
                         }
 
                         // Process input events
@@ -325,8 +327,10 @@ private fun runIOSurfaceRendererImpl(
 
                         onFrameRendered?.invoke(frameCount.toLong(), resources.skiaSurface)
 
-                        if (frameCount == 0) {
-                            ipc.sendFirstFrameRendered()
+                        // Notify host when new surface is ready (initial or resize)
+                        if (surfaceChanged) {
+                            ipc.sendSurfaceReady()
+                            surfaceChanged = false
                         }
                         frameCount++
                         needsRedraw.set(false)

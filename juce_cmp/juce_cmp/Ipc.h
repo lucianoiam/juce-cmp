@@ -21,7 +21,7 @@ namespace juce_cmp
  *
  * Handles both directions:
  * - TX (host → UI): Input events, resize, focus, ValueTree messages
- * - RX (UI → host): First frame notification, ValueTree messages
+ * - RX (UI → host): Frame ready notification, ValueTree messages
  *
  * Note: IOSurface sharing uses separate Mach port IPC (see MachPort.h).
  *
@@ -32,7 +32,7 @@ class Ipc
 {
 public:
     using EventHandler = std::function<void(const juce::ValueTree& tree)>;
-    using FirstFrameHandler = std::function<void()>;
+    using FrameReadyHandler = std::function<void()>;
 
     Ipc();
     ~Ipc();
@@ -40,7 +40,7 @@ public:
     // Configuration
     void setSocketFD(int fd);
     void setEventHandler(EventHandler handler) { onEvent = std::move(handler); }
-    void setFirstFrameHandler(FirstFrameHandler handler) { onFirstFrame = std::move(handler); }
+    void setFrameReadyHandler(FrameReadyHandler handler) { onFrameReady = std::move(handler); }
 
     // Lifecycle
     void startReceiving();
@@ -66,7 +66,7 @@ private:
     std::atomic<bool> running { false };
     std::thread readerThread;
     EventHandler onEvent;
-    FirstFrameHandler onFirstFrame;
+    FrameReadyHandler onFrameReady;
 
     JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR(Ipc)
 };
