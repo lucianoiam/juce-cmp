@@ -12,7 +12,7 @@ namespace juce_cmp
  * Surface - Manages shared GPU surfaces for cross-process rendering.
  *
  * On macOS: Uses IOSurface for zero-copy GPU sharing.
- *           Surfaces are shared via Mach port IPC (see MachPortIPC.h).
+ *           Surfaces are shared via Mach port IPC (see MachPort.h).
  * On Windows: Will use DXGI shared textures (TODO)
  * On Linux: Will use DMA-BUF file descriptors (TODO)
  */

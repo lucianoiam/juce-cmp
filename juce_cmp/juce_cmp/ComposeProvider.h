@@ -22,7 +22,7 @@ namespace juce_cmp
  * ComposeProvider - Orchestrates Compose UI embedding.
  *
  * Owns and coordinates: Surface, SurfaceView, ChildProcess, Ipc.
- * Pure C++ - no platform-specific code.
+ * Core logic is C++, with platform-specific surface sharing (MachPort on macOS).
  */
 class ComposeProvider
 {

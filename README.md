@@ -239,8 +239,8 @@ Events are 16-byte binary structs sent over the Unix socket (see `juce_cmp/juce_
 | 3      | 1    | modifiers  | Bitmask: 1=shift, 2=ctrl, 4=alt, 8=meta |
 | 4      | 2    | x          | Mouse X or key code                   |
 | 6      | 2    | y          | Mouse Y                               |
-| 8      | 2    | data1      | Scroll delta X (*100) or codepoint    |
-| 10     | 2    | data2      | Scroll delta Y (*100)                 |
+| 8      | 2    | data1      | Scroll delta X (*10000) or codepoint  |
+| 10     | 2    | data2      | Scroll delta Y (*10000)               |
 | 12     | 4    | timestamp  | Milliseconds since process start      |
 
 ## Bidirectional ValueTree Protocol

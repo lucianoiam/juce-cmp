@@ -29,7 +29,7 @@ IOSurfaceRef surface = IOSurfaceLookupFromMachPort(surfacePort);
 
 **Key components:**
 - `MachPort` class (C++): Handles bootstrap registration and port sending
-- `machChannelConnect()` / `machChannelReceiveSurface()` (Obj-C): Client-side channel
+- Client-side: Kotlin/JNI receives IOSurface ports via `Library.init()`
 
 **Flow:**
 1. Host registers service via `bootstrap_check_in()` with unique name
