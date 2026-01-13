@@ -46,15 +46,6 @@ class Ipc(private val socketFD: Int) {
     private val readBuffer = Memory(1024)
     private val writeBuffer = Memory(1024)
 
-    private companion object {
-        const val EVENT_TYPE_GFX = 0
-        const val EVENT_TYPE_INPUT = 1
-        const val EVENT_TYPE_JUCE = 2
-
-        const val GFX_EVENT_SURFACE_ID = 0
-        const val GFX_EVENT_FIRST_FRAME = 1
-    }
-
     /** Returns true if the receiver is still running (socket not closed) */
     val isRunning: Boolean get() = running
 
@@ -84,9 +75,9 @@ class Ipc(private val socketFD: Int) {
                     }
 
                     when (eventType) {
-                        EVENT_TYPE_INPUT -> handleInputEvent()
-                        EVENT_TYPE_GFX -> handleGfxEvent()
-                        EVENT_TYPE_JUCE -> handleJuceEvent()
+                        EventType.INPUT -> handleInputEvent()
+                        EventType.GFX -> handleGfxEvent()
+                        EventType.JUCE -> handleJuceEvent()
                     }
                 } catch (e: Exception) {
                     // Silently ignore exceptions when running
@@ -153,7 +144,7 @@ class Ipc(private val socketFD: Int) {
         }
 
         when (subtype) {
-            GFX_EVENT_SURFACE_ID -> {
+            GfxEvent.SURFACE_ID -> {
                 val buffer = readFully(4) ?: run {
                     running = false
                     kotlin.system.exitProcess(0)
@@ -161,7 +152,7 @@ class Ipc(private val socketFD: Int) {
                 val surfaceID = ByteBuffer.wrap(buffer).order(ByteOrder.LITTLE_ENDIAN).int
                 onSurfaceID?.invoke(surfaceID)
             }
-            // GFX_EVENT_FIRST_FRAME is UI → Host only, shouldn't receive here
+            // GfxEvent.FIRST_FRAME is UI → Host only, shouldn't receive here
         }
     }
 
@@ -200,7 +191,7 @@ class Ipc(private val socketFD: Int) {
 
     /**
      * Send a JuceValueTree to the host.
-     * Format: EVENT_TYPE_JUCE + 4-byte size + ValueTree bytes
+     * Format: EventType.JUCE + 4-byte size + ValueTree bytes
      */
     fun send(tree: JuceValueTree) {
         val treeBytes = tree.toByteArray()
@@ -208,7 +199,7 @@ class Ipc(private val socketFD: Int) {
         sizeBuffer.putInt(treeBytes.size)
 
         synchronized(writeLock) {
-            writeFully(byteArrayOf(EVENT_TYPE_JUCE.toByte()))
+            writeFully(byteArrayOf(EventType.JUCE.toByte()))
             writeFully(sizeBuffer.array())
             writeFully(treeBytes)
         }
@@ -216,11 +207,11 @@ class Ipc(private val socketFD: Int) {
 
     /**
      * Notify host that first frame has been rendered and surface is ready.
-     * Format: EVENT_TYPE_GFX + GFX_EVENT_FIRST_FRAME
+     * Format: EventType.GFX + GfxEvent.FIRST_FRAME
      */
     fun sendFirstFrameRendered() {
         synchronized(writeLock) {
-            writeFully(byteArrayOf(EVENT_TYPE_GFX.toByte(), GFX_EVENT_FIRST_FRAME.toByte()))
+            writeFully(byteArrayOf(EventType.GFX.toByte(), GfxEvent.FIRST_FRAME.toByte()))
         }
     }
 }

@@ -45,28 +45,28 @@ class InputDispatcher(
         lastPosition = position
         
         val eventType = when (event.action) {
-            Action.PRESS -> {
+            InputAction.PRESS -> {
                 pressedButtons.add(event.button)
                 PointerEventType.Press
             }
-            Action.RELEASE -> {
+            InputAction.RELEASE -> {
                 pressedButtons.remove(event.button)
                 PointerEventType.Release
             }
-            Action.MOVE -> PointerEventType.Move
-            Action.SCROLL -> PointerEventType.Scroll
+            InputAction.MOVE -> PointerEventType.Move
+            InputAction.SCROLL -> PointerEventType.Scroll
             else -> return
         }
         
         val button = when (event.button) {
-            MouseButton.LEFT -> PointerButton.Primary
-            MouseButton.RIGHT -> PointerButton.Secondary
-            MouseButton.MIDDLE -> PointerButton.Tertiary
+            InputButton.LEFT -> PointerButton.Primary
+            InputButton.RIGHT -> PointerButton.Secondary
+            InputButton.MIDDLE -> PointerButton.Tertiary
             else -> null
         }
         
         // For scroll events, we need to handle differently
-        if (event.action == Action.SCROLL) {
+        if (event.action == InputAction.SCROLL) {
             scene.sendPointerEvent(
                 eventType = PointerEventType.Scroll,
                 position = position,
@@ -89,24 +89,24 @@ class InputDispatcher(
     
     private fun dispatchKeyEvent(event: InputEvent) {
         val key = InputMapper.mapKeyCode(event.x) // x holds keyCode
-        val keyEventType = if (event.action == Action.PRESS) {
+        val keyEventType = if (event.action == InputAction.PRESS) {
             androidx.compose.ui.input.key.KeyEventType.KeyDown
         } else {
             androidx.compose.ui.input.key.KeyEventType.KeyUp
         }
         
         // Create AWT KeyEvent for Compose (it expects platform events)
-        val awtEventType = if (event.action == Action.PRESS) {
+        val awtEventType = if (event.action == InputAction.PRESS) {
             java.awt.event.KeyEvent.KEY_PRESSED
         } else {
             java.awt.event.KeyEvent.KEY_RELEASED
         }
         
         val awtModifiers = 
-            (if (Modifiers.hasShift(event.modifiers)) java.awt.event.InputEvent.SHIFT_DOWN_MASK else 0) or
-            (if (Modifiers.hasCtrl(event.modifiers)) java.awt.event.InputEvent.CTRL_DOWN_MASK else 0) or
-            (if (Modifiers.hasAlt(event.modifiers)) java.awt.event.InputEvent.ALT_DOWN_MASK else 0) or
-            (if (Modifiers.hasMeta(event.modifiers)) java.awt.event.InputEvent.META_DOWN_MASK else 0)
+            (if (InputMod.hasShift(event.modifiers)) java.awt.event.InputEvent.SHIFT_DOWN_MASK else 0) or
+            (if (InputMod.hasCtrl(event.modifiers)) java.awt.event.InputEvent.CTRL_DOWN_MASK else 0) or
+            (if (InputMod.hasAlt(event.modifiers)) java.awt.event.InputEvent.ALT_DOWN_MASK else 0) or
+            (if (InputMod.hasMeta(event.modifiers)) java.awt.event.InputEvent.META_DOWN_MASK else 0)
         
         val char = event.char ?: java.awt.event.KeyEvent.CHAR_UNDEFINED
         

@@ -4,12 +4,12 @@
 package juce_cmp.input
 
 /**
- * Input event types and data classes matching juce_cmp/ipc_protocol.h
+ * Input event types and data classes - mirrors input_event.h
  *
  * Input events are 16-byte payloads that follow an EVENT_TYPE_INPUT byte.
  */
 
-// Input event types (matching INPUT_EVENT_* in ipc_protocol.h)
+// Input event types (InputEvent.type field)
 object InputType {
     const val MOUSE = 0
     const val KEY = 1
@@ -17,24 +17,24 @@ object InputType {
     const val RESIZE = 3
 }
 
-// Mouse/key actions (matching INPUT_ACTION_* in ipc_protocol.h)
-object Action {
+// Mouse/key actions (InputEvent.action field)
+object InputAction {
     const val PRESS = 0
     const val RELEASE = 1
     const val MOVE = 2
     const val SCROLL = 3
 }
 
-// Mouse buttons (matching INPUT_BUTTON_* in ipc_protocol.h)
-object MouseButton {
+// Mouse buttons (InputEvent.button field)
+object InputButton {
     const val NONE = 0
     const val LEFT = 1
     const val RIGHT = 2
     const val MIDDLE = 3
 }
 
-// Modifier bitmask (matching INPUT_MOD_* in ipc_protocol.h)
-object Modifiers {
+// Modifier bitmask (InputEvent.modifiers field)
+object InputMod {
     const val SHIFT = 1
     const val CTRL = 2
     const val ALT = 4
@@ -51,20 +51,20 @@ object Modifiers {
  */
 data class InputEvent(
     val type: Int,        // InputType.*
-    val action: Int,      // Action.*
-    val button: Int,      // MouseButton.* for mouse events
-    val modifiers: Int,   // Modifiers bitmask
+    val action: Int,      // InputAction.*
+    val button: Int,      // InputButton.* for mouse events
+    val modifiers: Int,   // InputMod bitmask
     val x: Int,           // Mouse X or key code or width
     val y: Int,           // Mouse Y or height
-    val data1: Int,       // Scroll X (*100) or codepoint low
-    val data2: Int,       // Scroll Y (*100) or codepoint high
-    val timestamp: Long   // Milliseconds or new surface ID for RESIZE
+    val data1: Int,       // Scroll X (*10000) or codepoint low
+    val data2: Int,       // Scroll Y (*10000) or codepoint high
+    val timestamp: Long   // Milliseconds
 ) {
-    /** For scroll events, get the scroll delta X (0.01 precision) */
-    val scrollX: Float get() = data1 / 100f
+    /** For scroll events, get the scroll delta X */
+    val scrollX: Float get() = data1 / 10000f
 
-    /** For scroll events, get the scroll delta Y (0.01 precision) */
-    val scrollY: Float get() = data2 / 100f
+    /** For scroll events, get the scroll delta Y */
+    val scrollY: Float get() = data2 / 10000f
 
     /** For key events, get the UTF-32 codepoint */
     val codepoint: Int get() = (data2 shl 16) or (data1 and 0xFFFF)
@@ -83,7 +83,4 @@ data class InputEvent(
 
     /** For resize events, get the scale factor (e.g., 2.0 for Retina) */
     val scaleFactor: Float get() = if (data1 > 0) data1 / 100f else 1f
-
-    /** For resize events, get the new IOSurface ID */
-    val newSurfaceID: Int get() = timestamp.toInt()
 }

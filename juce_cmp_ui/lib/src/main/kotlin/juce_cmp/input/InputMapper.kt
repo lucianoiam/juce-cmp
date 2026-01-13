@@ -33,18 +33,18 @@ object InputMapper {
         lastMousePosition = position
         
         return when (event.action) {
-            Action.PRESS -> {
+            InputAction.PRESS -> {
                 pressedButtons = pressedButtons or (1 shl event.button)
                 PointerEventType.Press to position
             }
-            Action.RELEASE -> {
+            InputAction.RELEASE -> {
                 pressedButtons = pressedButtons and (1 shl event.button).inv()
                 PointerEventType.Release to position
             }
-            Action.MOVE -> {
+            InputAction.MOVE -> {
                 PointerEventType.Move to position
             }
-            Action.SCROLL -> {
+            InputAction.SCROLL -> {
                 PointerEventType.Scroll to position
             }
             else -> null
