@@ -47,7 +47,7 @@ public:
     void detachView();
     void updateViewBounds(int x, int y, int width, int height);
 
-    // Resize handling - defers view bounds update until surface is ready
+    // Resize handling - defers view update until new surface is ready
     void resize(int width, int height, int viewX, int viewY);
 
     // IPC
@@ -75,12 +75,11 @@ private:
     EventCallback eventCallback_;
     FirstFrameCallback firstFrameCallback_;
 
-    // Pending view bounds (applied when surface is ready)
+    // Pending view bounds (applied when new surface is ready)
     int pendingViewX_ = 0;
     int pendingViewY_ = 0;
     int pendingViewW_ = 0;
     int pendingViewH_ = 0;
-    bool hasPendingBounds_ = false;
 };
 
 }  // namespace juce_cmp

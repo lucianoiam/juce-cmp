@@ -63,14 +63,8 @@ bool ComposeProvider::launch(const std::string& executable, int width, int heigh
     });
 
     ipc_.setFrameReadyHandler([this]() {
-        // Apply pending view bounds first, then swap surface atomically
-        if (hasPendingBounds_)
-        {
-            view_.setFrame(pendingViewX_, pendingViewY_, pendingViewW_, pendingViewH_);
-            hasPendingBounds_ = false;
-        }
-
-        // Swap to latest surface now that child has rendered to it
+        // Apply pending bounds and swap surface atomically
+        view_.setFrame(pendingViewX_, pendingViewY_, pendingViewW_, pendingViewH_);
         view_.setPendingSurface(surface_.getNativeHandle());
 
         if (firstFrameCallback_)
@@ -129,6 +123,11 @@ void ComposeProvider::detachView()
 
 void ComposeProvider::updateViewBounds(int x, int y, int width, int height)
 {
+    // Update both actual and pending bounds
+    pendingViewX_ = x;
+    pendingViewY_ = y;
+    pendingViewW_ = width;
+    pendingViewH_ = height;
     view_.setFrame(x, y, width, height);
 }
 
@@ -137,24 +136,22 @@ void ComposeProvider::resize(int width, int height, int viewX, int viewY)
     if (width <= 0 || height <= 0)
         return;
 
+    // Store pending bounds - applied when SURFACE_READY arrives
+    pendingViewX_ = viewX;
+    pendingViewY_ = viewY;
+    pendingViewW_ = width;
+    pendingViewH_ = height;
+
     int pixelW = (int)(width * scale_);
     int pixelH = (int)(height * scale_);
 
     if (surface_.resize(pixelW, pixelH))
     {
-        // Store pending view bounds - will be applied when surface is ready
-        pendingViewX_ = viewX;
-        pendingViewY_ = viewY;
-        pendingViewW_ = width;
-        pendingViewH_ = height;
-        hasPendingBounds_ = true;
-
-        // Send resize event (dimensions, no surface ID)
         auto e = InputEventFactory::resize(pixelW, pixelH, scale_);
         ipc_.sendInput(e);
 
 #if __APPLE__
-        // Send new surface via Mach port channel
+        // Send new surface via Mach port
         // Child will send SURFACE_READY after rendering, then we swap surfaces
         sendSurfacePort();
 #endif

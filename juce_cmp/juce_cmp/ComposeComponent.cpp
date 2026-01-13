@@ -138,14 +138,12 @@ void ComposeComponent::resized()
 
     if (launched_)
     {
-        // Don't update view bounds here - defer until surface is ready
-        // This prevents jitter during resize
         auto* peer = getPeer();
-        if (peer)
-        {
-            auto topLeftInPeer = peer->getComponent().getLocalPoint(this, juce::Point<int>(0, 0));
-            provider_.resize(getWidth(), getHeight(), topLeftInPeer.x, topLeftInPeer.y);
-        }
+        if (!peer)
+            return;
+
+        auto topLeftInPeer = peer->getComponent().getLocalPoint(this, juce::Point<int>(0, 0));
+        provider_.resize(getWidth(), getHeight(), topLeftInPeer.x, topLeftInPeer.y);
     }
 }
 
