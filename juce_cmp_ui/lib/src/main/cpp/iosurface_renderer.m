@@ -1,7 +1,6 @@
 // SPDX-FileCopyrightText: 2026 Luciano Iam <oss@lucianoiam.com>
 // SPDX-License-Identifier: MIT
 
-#import <stdio.h>
 #import <stdlib.h>
 #import <unistd.h>
 #import <mach/mach.h>
@@ -117,27 +116,19 @@ ssize_t socketWrite(int socketFD, const void* buffer, size_t length) {
 // Connect to parent's Mach service and establish bidirectional channel
 // Returns opaque channel handle or NULL on failure
 void* machChannelConnect(const char* serviceName) {
-    if (serviceName == NULL || serviceName[0] == '\0') {
-        fprintf(stderr, "machChannelConnect: no service name provided\n");
+    if (serviceName == NULL || serviceName[0] == '\0')
         return NULL;
-    }
 
     // Look up the parent's service port
     mach_port_t serverPort;
     kern_return_t kr = bootstrap_look_up(bootstrap_port, (char*)serviceName, &serverPort);
-    if (kr != KERN_SUCCESS) {
-        fprintf(stderr, "bootstrap_look_up failed for '%s': %d (%s)\n",
-                serviceName, kr, mach_error_string(kr));
+    if (kr != KERN_SUCCESS)
         return NULL;
-    }
-
-    fprintf(stderr, "Connected to Mach service: %s\n", serviceName);
 
     // Create our receive port for incoming surface ports
     mach_port_t receivePort;
     kr = mach_port_allocate(mach_task_self(), MACH_PORT_RIGHT_RECEIVE, &receivePort);
     if (kr != KERN_SUCCESS) {
-        fprintf(stderr, "mach_port_allocate failed: %d\n", kr);
         mach_port_deallocate(mach_task_self(), serverPort);
         return NULL;
     }
@@ -145,7 +136,6 @@ void* machChannelConnect(const char* serviceName) {
     // Add send right so parent can send to us
     kr = mach_port_insert_right(mach_task_self(), receivePort, receivePort, MACH_MSG_TYPE_MAKE_SEND);
     if (kr != KERN_SUCCESS) {
-        fprintf(stderr, "mach_port_insert_right failed: %d\n", kr);
         mach_port_deallocate(mach_task_self(), receivePort);
         mach_port_deallocate(mach_task_self(), serverPort);
         return NULL;
@@ -183,12 +173,9 @@ void* machChannelConnect(const char* serviceName) {
     mach_port_deallocate(mach_task_self(), serverPort);  // Done with bootstrap port
 
     if (kr != KERN_SUCCESS) {
-        fprintf(stderr, "machChannelConnect: send failed: %d (%s)\n", kr, mach_error_string(kr));
         mach_port_deallocate(mach_task_self(), receivePort);
         return NULL;
     }
-
-    fprintf(stderr, "Mach channel established, receive port: %u\n", receivePort);
 
     MachChannel* channel = (MachChannel*)malloc(sizeof(MachChannel));
     channel->receivePort = receivePort;
@@ -223,24 +210,18 @@ IOSurfaceRef machChannelReceiveSurface(void* channelPtr) {
         MACH_PORT_NULL
     );
 
-    if (kr != KERN_SUCCESS) {
-        fprintf(stderr, "machChannelReceiveSurface: receive failed: %d (%s)\n", kr, mach_error_string(kr));
+    if (kr != KERN_SUCCESS)
         return NULL;
-    }
 
     mach_port_t surfacePort = msg.portDescriptor.name;
-    fprintf(stderr, "Received IOSurface port: %u\n", surfacePort);
 
     // Convert Mach port to IOSurface
     IOSurfaceRef surface = IOSurfaceLookupFromMachPort(surfacePort);
     mach_port_deallocate(mach_task_self(), surfacePort);
 
-    if (surface == NULL) {
-        fprintf(stderr, "IOSurfaceLookupFromMachPort failed\n");
+    if (surface == NULL)
         return NULL;
-    }
 
-    fprintf(stderr, "Got IOSurface: %zux%zu\n", IOSurfaceGetWidth(surface), IOSurfaceGetHeight(surface));
     return surface;  // Caller must CFRelease
 }
 

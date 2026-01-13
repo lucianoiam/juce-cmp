@@ -1,0 +1,8 @@
+# AI Context
+
+Guidelines for AI assistants working on this codebase.
+
+## Commits
+
+- Do not add Co-Authored-By lines to commit messages
+- Remove debug log lines (fprintf, println, etc.) before committing

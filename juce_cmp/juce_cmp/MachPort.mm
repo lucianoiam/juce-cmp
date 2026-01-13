@@ -7,7 +7,6 @@
 #include <mach/mach.h>
 #include <servers/bootstrap.h>
 #include <unistd.h>
-#include <cstdio>
 #endif
 
 namespace juce_cmp
@@ -33,13 +32,11 @@ std::string MachPort::createServer()
     kern_return_t kr = bootstrap_check_in(bootstrap_port, const_cast<char*>(serviceName_.c_str()), &port);
     if (kr != KERN_SUCCESS)
     {
-        fprintf(stderr, "bootstrap_check_in failed: %d (%s)\n", kr, mach_error_string(kr));
         serviceName_.clear();
         return "";
     }
 
     serverPort_ = (uint32_t)port;
-    fprintf(stderr, "Registered Mach service: %s\n", serviceName_.c_str());
     return serviceName_;
 #else
     return "";
@@ -72,15 +69,10 @@ bool MachPort::waitForClient()
     );
 
     if (kr != KERN_SUCCESS)
-    {
-        fprintf(stderr, "waitForClient: mach_msg receive failed: %d (%s)\n", kr, mach_error_string(kr));
         return false;
-    }
 
     // Extract client's port - this is a send right to client's receive port
     clientPort_ = (uint32_t)connectMsg.portDescriptor.name;
-    fprintf(stderr, "Client connected, got send right to port %u\n", clientPort_);
-
     return true;
 #else
     return false;
@@ -91,10 +83,7 @@ bool MachPort::sendPort(uint32_t machPort)
 {
 #if __APPLE__
     if (clientPort_ == 0)
-    {
-        fprintf(stderr, "sendPort: no client connected\n");
         return false;
-    }
 
     // Send IOSurface port to client via the established channel
     struct {
@@ -126,12 +115,8 @@ bool MachPort::sendPort(uint32_t machPort)
     );
 
     if (kr != KERN_SUCCESS)
-    {
-        fprintf(stderr, "sendPort: mach_msg send failed: %d (%s)\n", kr, mach_error_string(kr));
         return false;
-    }
 
-    fprintf(stderr, "Sent IOSurface port %u to client\n", machPort);
     return true;
 #else
     (void)machPort;

@@ -73,10 +73,7 @@ bool ComposeProvider::launch(const std::string& executable, int width, int heigh
     // Wait for client connection and send initial surface in background thread
     machPortThread_ = std::thread([this]() {
         if (!machPort_.waitForClient())
-        {
-            fprintf(stderr, "Failed to establish Mach channel with child\n");
             return;
-        }
 
         // Send initial IOSurface
         sendSurfacePort();
