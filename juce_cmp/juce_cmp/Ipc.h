@@ -5,6 +5,7 @@
 
 #include <juce_core/juce_core.h>
 #include <juce_data_structures/juce_data_structures.h>
+#include <juce_audio_basics/juce_audio_basics.h>
 #include <functional>
 #include <thread>
 #include <atomic>
@@ -32,6 +33,7 @@ class Ipc
 {
 public:
     using EventHandler = std::function<void(const juce::ValueTree& tree)>;
+    using MidiHandler = std::function<void(const juce::MidiMessage& message)>;
     using FrameReadyHandler = std::function<void()>;
 
     Ipc();
@@ -40,6 +42,7 @@ public:
     // Configuration
     void setSocketFD(int fd);
     void setEventHandler(EventHandler handler) { onEvent = std::move(handler); }
+    void setMidiHandler(MidiHandler handler) { onMidi = std::move(handler); }
     void setFrameReadyHandler(FrameReadyHandler handler) { onFrameReady = std::move(handler); }
 
     // Lifecycle
@@ -50,6 +53,7 @@ public:
     // TX: Host → UI
     void sendInput(InputEvent& event);
     void sendEvent(const juce::ValueTree& tree);
+    void sendMidi(const juce::MidiMessage& message);
 
 private:
 
@@ -57,6 +61,7 @@ private:
     void readerLoop();
     void handleCmpEvent();
     void handleJuceEvent();
+    void handleMidiEvent();
     ssize_t readFully(void* buffer, size_t size);
 
     // TX helper (non-blocking with retry)
@@ -69,6 +74,7 @@ private:
     std::atomic<bool> running { false };
     std::thread readerThread;
     EventHandler onEvent;
+    MidiHandler onMidi;
     FrameReadyHandler onFrameReady;
 
     JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR(Ipc)

@@ -5,6 +5,7 @@
 
 #include <juce_gui_basics/juce_gui_basics.h>
 #include <juce_data_structures/juce_data_structures.h>
+#include <juce_audio_basics/juce_audio_basics.h>
 #include "ComposeProvider.h"
 #include <functional>
 
@@ -29,6 +30,10 @@ public:
     using EventCallback = std::function<void(const juce::ValueTree& tree)>;
     void onEvent(EventCallback callback) { eventCallback_ = std::move(callback); }
 
+    /// Set callback for when UI sends MIDI messages
+    using MidiCallback = std::function<void(const juce::MidiMessage& message)>;
+    void onMidi(MidiCallback callback) { midiCallback_ = std::move(callback); }
+
     /// Set callback for when the child process is ready to receive events
     using ReadyCallback = std::function<void()>;
     void onProcessReady(ReadyCallback callback) { readyCallback_ = std::move(callback); }
@@ -39,6 +44,9 @@ public:
 
     /// Send an event to the UI
     void sendEvent(const juce::ValueTree& tree) { provider_.sendEvent(tree); }
+
+    /// Send a MIDI message to the UI
+    void sendMidi(const juce::MidiMessage& message) { provider_.sendMidi(message); }
 
     /// Set an image to display while the child process loads
     void setLoadingPreview(const juce::Image& image,
@@ -76,6 +84,7 @@ private:
 
     ComposeProvider provider_;
     EventCallback eventCallback_;
+    MidiCallback midiCallback_;
     ReadyCallback readyCallback_;
     FirstFrameCallback firstFrameCallback_;
 

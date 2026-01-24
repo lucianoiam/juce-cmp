@@ -62,6 +62,11 @@ bool ComposeProvider::launch(const std::string& executable, int width, int heigh
             eventCallback_(tree);
     });
 
+    ipc_.setMidiHandler([this](const juce::MidiMessage& message) {
+        if (midiCallback_)
+            midiCallback_(message);
+    });
+
     ipc_.setFrameReadyHandler([this]() {
         // Apply pending bounds and swap surface atomically
         view_.setFrame(pendingViewX_, pendingViewY_, pendingViewW_, pendingViewH_);
@@ -161,6 +166,11 @@ void ComposeProvider::sendInput(InputEvent& event)
 void ComposeProvider::sendEvent(const juce::ValueTree& tree)
 {
     ipc_.sendEvent(tree);
+}
+
+void ComposeProvider::sendMidi(const juce::MidiMessage& message)
+{
+    ipc_.sendMidi(message);
 }
 
 #if __APPLE__

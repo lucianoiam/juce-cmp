@@ -95,6 +95,23 @@ void Ipc::sendEvent(const juce::ValueTree& tree)
 #endif
 }
 
+void Ipc::sendMidi(const juce::MidiMessage& message)
+{
+    if (socketFD < 0) return;
+
+    auto size = static_cast<uint8_t>(message.getRawDataSize());
+    if (size == 0 || size > 255) return;
+
+#if JUCE_MAC || JUCE_LINUX
+    uint8_t prefix = EVENT_TYPE_MIDI;
+    if (!writeNonBlocking(&prefix, 1))
+        return;
+    if (!writeNonBlocking(&size, 1))
+        return;
+    writeNonBlocking(message.getRawData(), size);
+#endif
+}
+
 // =============================================================================
 // RX: UI → Host
 // =============================================================================
@@ -114,6 +131,9 @@ void Ipc::readerLoop()
                 break;
             case EVENT_TYPE_JUCE:
                 handleJuceEvent();
+                break;
+            case EVENT_TYPE_MIDI:
+                handleMidiEvent();
                 break;
             default:
                 break;
@@ -155,6 +175,29 @@ void Ipc::handleJuceEvent()
         juce::MessageManager::callAsync([this, tree]() {
             if (onEvent)
                 onEvent(tree);
+        });
+    }
+}
+
+void Ipc::handleMidiEvent()
+{
+    uint8_t size = 0;
+    if (readFully(&size, 1) != 1)
+        return;
+
+    if (size == 0 || size > 255)
+        return;
+
+    uint8_t data[256];
+    if (readFully(data, size) != static_cast<ssize_t>(size))
+        return;
+
+    auto message = juce::MidiMessage(data, static_cast<int>(size));
+    if (onMidi)
+    {
+        juce::MessageManager::callAsync([this, message]() {
+            if (onMidi)
+                onMidi(message);
         });
     }
 }

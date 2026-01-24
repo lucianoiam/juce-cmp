@@ -7,6 +7,7 @@ import androidx.compose.runtime.Composable
 import juce_cmp.ipc.Ipc
 import juce_cmp.ipc.JuceValueTree
 import juce_cmp.renderer.runIOSurfaceRenderer
+import javax.sound.midi.MidiMessage
 import java.io.FileDescriptor
 import java.io.FileOutputStream
 import java.io.PrintStream
@@ -33,8 +34,15 @@ object Library {
     /**
      * Send a JuceValueTree event to the host.
      */
-    fun send(tree: JuceValueTree) {
-        ipc?.send(tree)
+    fun sendJuceEvent(tree: JuceValueTree) {
+        ipc?.sendJuceEvent(tree)
+    }
+
+    /**
+     * Send a MIDI message to the host.
+     */
+    fun sendMidiEvent(message: MidiMessage) {
+        ipc?.sendMidiEvent(message)
     }
 
     /**
@@ -91,12 +99,14 @@ object Library {
      * This function blocks and renders Compose content until the host closes
      * the connection. Mirrors the Compose `application { }` pattern.
      *
-     * @param onEvent Optional callback when host sends events (JuceValueTree payload)
+     * @param onJuceEvent Optional callback when host sends JuceValueTree events
+     * @param onMidiEvent Optional callback when host sends MIDI messages
      * @param onFrameRendered Optional callback after each frame (for debugging/capture)
      * @param content The Compose content to render
      */
     fun host(
-        onEvent: ((tree: JuceValueTree) -> Unit)? = null,
+        onJuceEvent: ((tree: JuceValueTree) -> Unit)? = null,
+        onMidiEvent: ((message: MidiMessage) -> Unit)? = null,
         onFrameRendered: ((frameNumber: Long, surface: org.jetbrains.skia.Surface) -> Unit)? = null,
         content: @Composable () -> Unit
     ) {
@@ -109,7 +119,8 @@ object Library {
             machServiceName = machServiceName,
             ipc = channel,
             onFrameRendered = onFrameRendered,
-            onJuceEvent = onEvent,
+            onJuceEvent = onJuceEvent,
+            onMidiEvent = onMidiEvent,
             content = content
         )
     }

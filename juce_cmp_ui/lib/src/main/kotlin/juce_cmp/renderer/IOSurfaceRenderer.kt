@@ -17,6 +17,7 @@ import kotlinx.coroutines.*
 import juce_cmp.ipc.Ipc
 import juce_cmp.ipc.JuceValueTree
 import juce_cmp.input.InputDispatcher
+import javax.sound.midi.MidiMessage
 import juce_cmp.input.InputEvent
 import juce_cmp.input.InputType
 import org.jetbrains.skia.*
@@ -34,6 +35,7 @@ import java.util.concurrent.atomic.AtomicReference
  * @param ipc The IPC channel for communication with host
  * @param onFrameRendered Optional callback invoked after each frame is rendered
  * @param onJuceEvent Optional callback when host sends events of type JUCE (JuceValueTree payload)
+ * @param onMidiEvent Optional callback when host sends MIDI messages
  * @param content The Compose content to render
  */
 fun runIOSurfaceRenderer(
@@ -43,9 +45,10 @@ fun runIOSurfaceRenderer(
     ipc: Ipc,
     onFrameRendered: ((frameNumber: Long, surface: Surface) -> Unit)? = null,
     onJuceEvent: ((tree: JuceValueTree) -> Unit)? = null,
+    onMidiEvent: ((message: MidiMessage) -> Unit)? = null,
     content: @Composable () -> Unit
 ) {
-    runIOSurfaceRendererImpl(socketFD, scaleFactor, machServiceName, ipc, onFrameRendered, onJuceEvent, content)
+    runIOSurfaceRendererImpl(socketFD, scaleFactor, machServiceName, ipc, onFrameRendered, onJuceEvent, onMidiEvent, content)
 }
 
 /**
@@ -177,6 +180,7 @@ private fun runIOSurfaceRendererImpl(
     ipc: Ipc,
     onFrameRendered: ((frameNumber: Long, surface: Surface) -> Unit)? = null,
     onJuceEvent: ((tree: JuceValueTree) -> Unit)? = null,
+    onMidiEvent: ((message: MidiMessage) -> Unit)? = null,
     content: @Composable () -> Unit
 ) {
     if (machServiceName == null) {
@@ -223,7 +227,8 @@ private fun runIOSurfaceRendererImpl(
                 }
                 needsRedraw.set(true)
             },
-            onJuceEvent = onJuceEvent
+            onJuceEvent = onJuceEvent,
+            onMidiEvent = onMidiEvent
         )
 
         // Start thread to receive IOSurfaces from Mach channel

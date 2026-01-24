@@ -101,6 +101,11 @@ void ComposeComponent::tryLaunch()
             eventCallback_(tree);
     });
 
+    provider_.setMidiCallback([this](const juce::MidiMessage& message) {
+        if (midiCallback_)
+            midiCallback_(message);
+    });
+
     provider_.setFirstFrameCallback([this]() {
         firstFrameReceived_ = true;
         repaint();

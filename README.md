@@ -11,7 +11,8 @@ https://github.com/user-attachments/assets/1a56b7d8-f1eb-4f5d-bcfa-0890e39a7270
 Alpha software.
 
 - macOS implementation complete
-- Basic bidirectional message passing (ValueTree payloads)
+- Bidirectional ValueTree message passing
+- Bidirectional MIDI message passing
 
 ## Quick Start
 
@@ -93,7 +94,7 @@ class MyEditor : public juce::AudioProcessorEditor {
     MyEditor(AudioProcessor& p) : AudioProcessorEditor(p) {
         addAndMakeVisible(composeComponent);
 
-        // Handle messages from UI (app interprets ValueTree content)
+        // Handle ValueTree messages from UI
         composeComponent.onEvent([&](const juce::ValueTree& tree) {
             if (tree.getType() == juce::Identifier("param")) {
                 auto paramId = (int)tree.getProperty("id");
@@ -102,11 +103,19 @@ class MyEditor : public juce::AudioProcessorEditor {
             }
         });
 
-        // Send message to UI
+        // Handle MIDI from UI (e.g., soft keyboard)
+        composeComponent.onMidi([&](const juce::MidiMessage& message) {
+            // Forward to your processor's MIDI buffer
+        });
+
+        // Send ValueTree message to UI
         juce::ValueTree tree("param");
         tree.setProperty("id", 0, nullptr);
         tree.setProperty("value", 0.5, nullptr);
         composeComponent.sendEvent(tree);
+
+        // Send MIDI to UI
+        composeComponent.sendMidi(juce::MidiMessage::noteOn(1, 60, 0.8f));
     }
 };
 ```
@@ -153,13 +162,20 @@ dependencies {
 
 // main.kt
 import juce_cmp.Library
+import juce_cmp.ipc.JuceValueTree
+import javax.sound.midi.ShortMessage
 
 fun main(args: Array<String>) {
     Library.init(args)  // MUST be first - parses args, sets up IPC
 
     if (Library.hasHost) {
         // Embedded mode - render to host's shared surface
-        Library.host { MyApp() }
+        Library.host(
+            onJuceEvent = { tree -> /* handle ValueTree from host */ },
+            onMidiEvent = { message -> /* handle MIDI from host */ }
+        ) {
+            MyApp()
+        }
     } else {
         // Standalone window mode
         application {
@@ -169,6 +185,15 @@ fun main(args: Array<String>) {
         }
     }
 }
+
+// Send ValueTree to host
+Library.sendJuceEvent(JuceValueTree("param").apply {
+    this["id"] = 0
+    this["value"] = 0.5
+})
+
+// Send MIDI to host
+Library.sendMidiEvent(ShortMessage(ShortMessage.NOTE_ON, 0, 60, 127))
 ```
 
 ### Demo Application
@@ -192,7 +217,8 @@ All messages have a 1-byte type prefix:
 |------|-------|-----------|---------|
 | INPUT | 0x00 | Host→Child | 16-byte input event |
 | CMP | 0x01 | Child→Host | 1-byte subtype (SURFACE_READY=0) |
-| JUCE | 0x02 | Bidirectional | 4-byte size + ValueTree data |
+| MIDI | 0x02 | Bidirectional | 1-byte size + raw MIDI bytes |
+| JUCE | 0x03 | Bidirectional | 4-byte size + ValueTree data |
 
 ### Input Event (16 bytes)
 
@@ -207,6 +233,10 @@ All messages have a 1-byte type prefix:
 | 8 | 2 | data1 | Scroll delta X (×10000) or codepoint low |
 | 10 | 2 | data2 | Scroll delta Y (×10000) or codepoint high |
 | 12 | 4 | timestamp | Milliseconds since process start |
+
+### MIDI Messages
+
+Raw MIDI bytes prefixed by a 1-byte size. Supports standard MIDI messages (note on/off, CC, etc.) and SysEx. Uses `juce::MidiMessage` on the C++ side and `javax.sound.midi` classes on the Kotlin side.
 
 ### ValueTree Messages
 

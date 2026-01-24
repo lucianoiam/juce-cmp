@@ -14,7 +14,8 @@ package juce_cmp.ipc
 object EventType {
     const val INPUT = 0
     const val CMP = 1
-    const val JUCE = 2
+    const val MIDI = 2
+    const val JUCE = 3
 }
 
 // CMP event types (second byte for EventType.CMP)

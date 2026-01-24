@@ -10,6 +10,7 @@
 #include "MachPort.h"
 #include <juce_core/juce_core.h>
 #include <juce_data_structures/juce_data_structures.h>
+#include <juce_audio_basics/juce_audio_basics.h>
 #include <cstdint>
 #include <string>
 #include <functional>
@@ -28,6 +29,7 @@ class ComposeProvider
 {
 public:
     using EventCallback = std::function<void(const juce::ValueTree&)>;
+    using MidiCallback = std::function<void(const juce::MidiMessage&)>;
     using FirstFrameCallback = std::function<void()>;
 
     ComposeProvider();
@@ -35,6 +37,7 @@ public:
 
     // Callbacks
     void setEventCallback(EventCallback callback) { eventCallback_ = std::move(callback); }
+    void setMidiCallback(MidiCallback callback) { midiCallback_ = std::move(callback); }
     void setFirstFrameCallback(FirstFrameCallback callback) { firstFrameCallback_ = std::move(callback); }
 
     // Lifecycle
@@ -52,6 +55,7 @@ public:
     // IPC
     void sendInput(InputEvent& event);
     void sendEvent(const juce::ValueTree& tree);
+    void sendMidi(const juce::MidiMessage& message);
 
     // State
     float getScale() const { return scale_; }
@@ -72,6 +76,7 @@ private:
 
     float scale_ = 1.0f;
     EventCallback eventCallback_;
+    MidiCallback midiCallback_;
     FirstFrameCallback firstFrameCallback_;
 
     // Pending view bounds (applied when new surface is ready)

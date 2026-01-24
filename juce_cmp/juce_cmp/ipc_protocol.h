@@ -21,7 +21,8 @@ extern "C" {
  */
 #define EVENT_TYPE_INPUT            0
 #define EVENT_TYPE_CMP              1
-#define EVENT_TYPE_JUCE             2
+#define EVENT_TYPE_MIDI             2
+#define EVENT_TYPE_JUCE             3
 
 /*
  * CMP event types (second byte for EVENT_TYPE_CMP)
@@ -35,6 +36,9 @@ extern "C" {
  * Note: IOSurface sharing uses Mach port IPC (see MachPort.h), not socket.
  *
  * INPUT event payload - see InputEvent.h
+ *
+ * MIDI event payload - follows EVENT_TYPE_MIDI prefix.
+ *   1-byte size + raw MIDI bytes (bidirectional)
  *
  * JUCE event payload - follows EVENT_TYPE_JUCE prefix.
  *   4-byte size (little-endian) + ValueTree binary data

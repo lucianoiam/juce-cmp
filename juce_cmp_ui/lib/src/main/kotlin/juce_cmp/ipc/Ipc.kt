@@ -9,6 +9,9 @@ import com.sun.jna.Native
 import com.sun.jna.Pointer
 import java.nio.ByteBuffer
 import java.nio.ByteOrder
+import javax.sound.midi.MidiMessage
+import javax.sound.midi.ShortMessage
+import javax.sound.midi.SysexMessage
 import juce_cmp.input.InputEvent
 
 /**
@@ -53,14 +56,17 @@ class Ipc(private val socketFD: Int) {
 
     private var onInputEvent: ((InputEvent) -> Unit)? = null
     private var onJuceEvent: ((JuceValueTree) -> Unit)? = null
+    private var onMidiEvent: ((MidiMessage) -> Unit)? = null
 
     fun startReceiving(
         onInputEvent: (InputEvent) -> Unit,
-        onJuceEvent: ((JuceValueTree) -> Unit)? = null
+        onJuceEvent: ((JuceValueTree) -> Unit)? = null,
+        onMidiEvent: ((MidiMessage) -> Unit)? = null
     ) {
         if (running) return
         this.onInputEvent = onInputEvent
         this.onJuceEvent = onJuceEvent
+        this.onMidiEvent = onMidiEvent
         running = true
         thread = Thread({
             while (running) {
@@ -75,6 +81,7 @@ class Ipc(private val socketFD: Int) {
                         EventType.INPUT -> handleInputEvent()
                         EventType.CMP -> handleCmpEvent()
                         EventType.JUCE -> handleJuceEvent()
+                        EventType.MIDI -> handleMidiEvent()
                     }
                 } catch (e: Exception) {
                     // Silently ignore exceptions when running
@@ -162,6 +169,41 @@ class Ipc(private val socketFD: Int) {
         }
     }
 
+    private fun handleMidiEvent() {
+        val size = readByte()
+        if (size < 0) {
+            running = false
+            kotlin.system.exitProcess(0)
+        }
+
+        if (size > 0 && onMidiEvent != null) {
+            val payload = readFully(size) ?: run {
+                running = false
+                kotlin.system.exitProcess(0)
+            }
+
+            val message = createMidiMessage(payload)
+            if (message != null) {
+                onMidiEvent?.invoke(message)
+            }
+        }
+    }
+
+    private fun createMidiMessage(data: ByteArray): MidiMessage? {
+        if (data.isEmpty()) return null
+        val status = data[0].toInt() and 0xFF
+        return if (status == 0xF0 || status == 0xF7) {
+            SysexMessage(data, data.size)
+        } else {
+            when (data.size) {
+                1 -> ShortMessage(status)
+                2 -> ShortMessage(status, data[1].toInt() and 0xFF, 0)
+                3 -> ShortMessage(status, data[1].toInt() and 0xFF, data[2].toInt() and 0xFF)
+                else -> null
+            }
+        }
+    }
+
     // ---- Sending (UI → Host) ----
 
     private fun writeFully(data: ByteArray) {
@@ -181,7 +223,7 @@ class Ipc(private val socketFD: Int) {
      * Send a JuceValueTree to the host.
      * Format: EventType.JUCE + 4-byte size + ValueTree bytes
      */
-    fun send(tree: JuceValueTree) {
+    fun sendJuceEvent(tree: JuceValueTree) {
         val treeBytes = tree.toByteArray()
         val sizeBuffer = ByteBuffer.allocate(4).order(ByteOrder.LITTLE_ENDIAN)
         sizeBuffer.putInt(treeBytes.size)
@@ -200,6 +242,21 @@ class Ipc(private val socketFD: Int) {
     fun sendSurfaceReady() {
         synchronized(writeLock) {
             writeFully(byteArrayOf(EventType.CMP.toByte(), CmpEvent.SURFACE_READY.toByte()))
+        }
+    }
+
+    /**
+     * Send a MIDI message to the host.
+     * Format: EventType.MIDI + 1-byte size + raw MIDI bytes
+     */
+    fun sendMidiEvent(message: MidiMessage) {
+        val data = message.message
+        val length = message.length
+        if (length == 0 || length > 255) return
+
+        synchronized(writeLock) {
+            writeFully(byteArrayOf(EventType.MIDI.toByte(), length.toByte()))
+            writeFully(data.copyOf(length))
         }
     }
 }
