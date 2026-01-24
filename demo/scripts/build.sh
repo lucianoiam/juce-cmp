@@ -6,8 +6,11 @@ cd "$(dirname "$0")/../.."
 
 echo "=== Building juce-cmp ==="
 
-# Configure
-cmake -B build
+# Configure only if needed (build dir doesn't exist or CMakeLists.txt changed)
+if [ ! -f build/CMakeCache.txt ] || [ CMakeLists.txt -nt build/CMakeCache.txt ]; then
+    echo "=== Configuring CMake ==="
+    cmake -B build
+fi
 
 # Build all targets
 echo "=== Building native renderer ==="
