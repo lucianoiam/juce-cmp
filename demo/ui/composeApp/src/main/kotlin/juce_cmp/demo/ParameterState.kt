@@ -54,7 +54,7 @@ object ParameterState {
         val tree = JuceValueTree("param")
         tree["id"] = paramId
         tree["value"] = value.toDouble()
-        Library.send(tree)
+        Library.sendJuceEvent(tree)
     }
 
     /**

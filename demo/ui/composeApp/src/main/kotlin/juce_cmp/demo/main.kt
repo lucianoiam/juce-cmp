@@ -23,7 +23,7 @@ fun main(args: Array<String>) {
         Library.host(
             // DEV: Uncomment to generate loading_preview.png from first rendered frame
             // onFrameRendered = captureFirstFrame("/tmp/loading_preview.png"),
-            onEvent = ParameterState::onEvent
+            onJuceEvent = ParameterState::onEvent
         ) {
             UserInterface()
         }
