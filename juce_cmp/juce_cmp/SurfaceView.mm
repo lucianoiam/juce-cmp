@@ -276,10 +276,13 @@ float SurfaceView::getBackingScaleForView(void* nativeView)
         if (NSWindow* window = view.window)
             return (float)window.backingScaleFactor;
     }
+    // Fallback: use main screen scale when view isn't attached to a window yet
+    // (common case for plugins during initial layout in DAWs)
+    return (float)NSScreen.mainScreen.backingScaleFactor;
 #else
     (void)nativeView;
-#endif
     return 1.0f;
+#endif
 }
 
 }  // namespace juce_cmp
