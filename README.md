@@ -4,7 +4,7 @@ A JUCE module for embedding Compose Multiplatform UI in audio plugins.
 
 https://github.com/user-attachments/assets/1a56b7d8-f1eb-4f5d-bcfa-0890e39a7270
 
-**Note:** This project was entirely vibe-coded by Claude Opus 4.5 under human supervision. Final code review pending.
+**Note:** This project was entirely vibe-coded by [Claude](https://claude.ai) under human supervision. Final code review pending.
 
 ## Status
 
@@ -13,6 +13,10 @@ Alpha software.
 - macOS implementation complete
 - Bidirectional ValueTree message passing
 - Bidirectional MIDI message passing
+
+## Example Project
+
+[Sfarzo](https://github.com/lucianoiam/sfarzo) - An SFZ sampler plugin built with juce-cmp (also vibe-coded with Claude).
 
 ## Quick Start
 
