@@ -87,10 +87,10 @@ void ComposeComponent::tryLaunch()
     if (auto* peer = getPeer())
         scale = SurfaceView::getBackingScaleForView(peer->getNativeHandle());
 
-    // Find UI executable
+    // Find UI executable (named <BinaryName>_UI)
     auto execFile = juce::File::getSpecialLocation(juce::File::currentExecutableFile);
     auto macosDir = execFile.getParentDirectory();
-    auto rendererPath = macosDir.getChildFile("ui");
+    auto rendererPath = macosDir.getChildFile(execFile.getFileNameWithoutExtension() + "_UI");
 
     if (!rendererPath.existsAsFile())
         return;

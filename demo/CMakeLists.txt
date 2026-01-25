@@ -58,7 +58,7 @@ if(APPLE)
         # Copy Compose launcher to MacOS/
         COMMAND ${CMAKE_COMMAND} -E copy
             "${CMP_UI_CONTENTS}/MacOS/juce-cmp-demo"
-            "$<TARGET_BUNDLE_DIR:juce-cmp-demo_Standalone>/Contents/MacOS/ui"
+            "$<TARGET_BUNDLE_DIR:juce-cmp-demo_Standalone>/Contents/MacOS/juce-cmp-demo_UI"
         # Copy JARs + Skiko dylib to app/
         COMMAND ${CMAKE_COMMAND} -E copy_directory
             "${CMP_UI_CONTENTS}/app"
@@ -66,7 +66,7 @@ if(APPLE)
         # Rename config file to match binary name
         COMMAND ${CMAKE_COMMAND} -E rename
             "$<TARGET_BUNDLE_DIR:juce-cmp-demo_Standalone>/Contents/app/juce-cmp-demo.cfg"
-            "$<TARGET_BUNDLE_DIR:juce-cmp-demo_Standalone>/Contents/app/ui.cfg"
+            "$<TARGET_BUNDLE_DIR:juce-cmp-demo_Standalone>/Contents/app/juce-cmp-demo_UI.cfg"
         # Copy jlink'd JVM to runtime/
         COMMAND ${CMAKE_COMMAND} -E copy_directory
             "${CMP_UI_CONTENTS}/runtime"
@@ -82,13 +82,13 @@ if(APPLE)
     add_custom_command(TARGET juce-cmp-demo_AU POST_BUILD
         COMMAND ${CMAKE_COMMAND} -E copy
             "${CMP_UI_CONTENTS}/MacOS/juce-cmp-demo"
-            "$<TARGET_BUNDLE_DIR:juce-cmp-demo_AU>/Contents/MacOS/ui"
+            "$<TARGET_BUNDLE_DIR:juce-cmp-demo_AU>/Contents/MacOS/juce-cmp-demo_UI"
         COMMAND ${CMAKE_COMMAND} -E copy_directory
             "${CMP_UI_CONTENTS}/app"
             "$<TARGET_BUNDLE_DIR:juce-cmp-demo_AU>/Contents/app"
         COMMAND ${CMAKE_COMMAND} -E rename
             "$<TARGET_BUNDLE_DIR:juce-cmp-demo_AU>/Contents/app/juce-cmp-demo.cfg"
-            "$<TARGET_BUNDLE_DIR:juce-cmp-demo_AU>/Contents/app/ui.cfg"
+            "$<TARGET_BUNDLE_DIR:juce-cmp-demo_AU>/Contents/app/juce-cmp-demo_UI.cfg"
         COMMAND ${CMAKE_COMMAND} -E copy_directory
             "${CMP_UI_CONTENTS}/runtime"
             "$<TARGET_BUNDLE_DIR:juce-cmp-demo_AU>/Contents/runtime"
